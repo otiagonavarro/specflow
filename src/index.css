@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -35,4 +36,117 @@
   }
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+/* OpenSpec CLI output (react-markdown) */
+.openspec-cli-md {
+  color: rgb(161 161 170);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.openspec-cli-md h1,
+.openspec-cli-md h2,
+.openspec-cli-md h3,
+.openspec-cli-md h4 {
+  color: rgb(244 244 245);
+  font-weight: 700;
+  margin-top: 0.65rem;
+  margin-bottom: 0.2rem;
+}
+
+.openspec-cli-md h1 {
+  font-size: 1.05em;
+}
+
+.openspec-cli-md h2 {
+  font-size: 1em;
+}
+
+.openspec-cli-md h3,
+.openspec-cli-md h4 {
+  font-size: 0.95em;
+}
+
+.openspec-cli-md p {
+  margin: 0.35rem 0;
+}
+
+.openspec-cli-md ul,
+.openspec-cli-md ol {
+  margin: 0.35rem 0;
+  padding-left: 1.2rem;
+}
+
+.openspec-cli-md li {
+  margin: 0.15rem 0;
+}
+
+.openspec-cli-md pre {
+  background: rgb(0 0 0 / 0.45);
+  border: 1px solid rgb(39 39 42);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  overflow-x: auto;
+  margin: 0.45rem 0;
+}
+
+.openspec-cli-md code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.openspec-cli-md pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.95em;
+  color: rgb(212 212 216);
+}
+
+.openspec-cli-md :not(pre) > code {
+  background: rgb(0 0 0 / 0.4);
+  padding: 0.08em 0.32em;
+  border-radius: 0.25rem;
+  color: rgb(212 212 216);
+}
+
+.openspec-cli-md strong {
+  color: rgb(250 250 250);
+  font-weight: 600;
+}
+
+.openspec-cli-md a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.openspec-cli-md blockquote {
+  border-left: 3px solid rgb(99 102 241 / 0.45);
+  margin: 0.45rem 0;
+  padding-left: 0.65rem;
+  color: rgb(180 180 190);
+}
+
+.openspec-cli-md hr {
+  border: 0;
+  border-top: 1px solid rgb(63 63 70);
+  margin: 0.65rem 0;
+}
+
+.openspec-cli-md table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+  margin: 0.45rem 0;
+}
+
+.openspec-cli-md th,
+.openspec-cli-md td {
+  border: 1px solid rgb(63 63 70);
+  padding: 0.25rem 0.4rem;
+  text-align: left;
+}
+
+.openspec-cli-md th {
+  background: rgb(0 0 0 / 0.25);
+  color: rgb(228 228 231);
+}

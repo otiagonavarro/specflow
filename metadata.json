@@ -1,5 +1,5 @@
 {
-  "name": "Monolith OS",
-  "description": "A high-performance system orchestration dashboard for monolith architectures.",
+  "name": "kanbam-code",
+  "description": "Local Jira kanban UI with Express API proxy for integrations.",
   "requestFramePermissions": []
 }
