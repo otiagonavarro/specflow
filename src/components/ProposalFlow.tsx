@@ -40,7 +40,7 @@ export default function ProposalFlow() {
         <div className="space-y-2">
           <h1 className="text-5xl font-black tracking-tighter text-white">OpenCode Proposal Flow</h1>
           <p className="text-zinc-500 max-w-2xl text-lg leading-relaxed">
-            Orchestrate the automated architectural alignment and deployment sequence for the v3.4 expansion. This flow ensures parity between regional clusters and the core monolith engine.
+            Orchestrate the automated architectural alignment and deployment sequence for the v3.4 expansion. This flow ensures parity between regional clusters and your Jira-linked workspace.
           </p>
         </div>
         <span className="px-4 py-1.5 rounded-lg bg-primary-container/20 text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-primary/20">
@@ -188,7 +188,7 @@ export default function ProposalFlow() {
             <div className="p-8 h-64 overflow-y-auto font-mono text-sm leading-relaxed text-zinc-400">
               {logs.map((log, i) => (
                 <div key={i} className="mb-1.5">
-                  {log.includes('[SUCCESS]') ? (
+                  {log?.includes('[SUCCESS]') ? (
                     <>
                       {log.split('[SUCCESS]')[0]}
                       <span className="text-primary font-bold">[SUCCESS]</span>

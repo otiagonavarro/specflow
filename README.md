@@ -1,20 +1,164 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+<!-- markdownlint-disable -->
+# kanbam-code
 
-# Run and deploy your AI Studio app
+**Jira-integrated kanban UI + local Express API.** The browser never holds Jira tokens; the server reads them from `.env` or from in-app Settings.
 
-This contains everything you need to run your app locally.
+**Works on macOS, Windows, and Linux** (Node.js + Git for the `create` flow).
 
-View your app in AI Studio: https://ai.studio/apps/b1d72b3b-f99d-416f-849e-dba6b888763b
+**Not on the public npm registry.** Bare `npx kanbam-code …` will 404. Either use **`npx --package=github:tiagornandrade/kanbam-code kanbam-code …`** (see below) or clone the repo and run commands locally.
 
-## Run Locally
+---
 
-**Prerequisites:**  Node.js
+## Getting Started
 
+### From any folder (recommended)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+You do **not** need to be inside this repository. Pick a parent directory (e.g. `~/projects`), then run:
+
+```bash
+npx --package=github:tiagornandrade/kanbam-code kanbam-code create my-dashboard
+cd my-dashboard
+npm run init
+```
+
+- **`create`** clones the repo into `./my-dashboard`, runs `npm install`, and prints the next step.
+- **`npm run init`** creates `.env` from `.env.example` if needed, starts the **API** (default port **58471**), then the **UI** (default **58470**). Open the URL printed in the terminal.
+
+Stop with **Ctrl+C**.
+
+> **Fork?** After you fork on GitHub, either pass your repo URL explicitly:
+>
+> ```bash
+> npx --package=github:YOUR_USER/kanbam-code kanbam-code create my-dashboard https://github.com/YOUR_USER/kanbam-code.git
+> ```
+>
+> or set `package.json` → `repository.url` on your fork so `create` uses the right clone URL, or set the env var **`KANBAM_CODE_REPO`** to your `https://github.com/.../kanbam-code.git`.
+
+### One-liner (clone + install + run)
+
+```bash
+git clone https://github.com/tiagornandrade/kanbam-code.git && cd kanbam-code && npm install && npm run init
+```
+
+### Already cloned (development)
+
+```bash
+cd kanbam-code
+npm install
+npm run init
+```
+
+Same as **`npm start`**.
+
+### Start only (from inside the repo)
+
+After **`npm install`** in the clone, from the project root **or any subfolder**:
+
+```bash
+npx kanbam-code init
+```
+
+That uses the local `bin` from this package. Without installing dependencies, run:
+
+```bash
+node bin/kanbam-code.mjs init
+```
+
+---
+
+## Verify
+
+- UI loads at the host/port Vite prints (default **http://localhost:58470**).
+- API health: **http://localhost:58471/api/health** (or your `SERVER_PORT`).
+
+---
+
+## Prerequisites
+
+| Tool        | Required for              |
+|------------|---------------------------|
+| Node.js 18.18+ | Always                  |
+| npm 9+     | Always                    |
+| Git        | `kanbam-code create` and manual clone |
+
+---
+
+## Ports (defaults)
+
+High-range ports reduce clashes with common stacks (3000, 5173, 8080):
+
+| Service | Port  | Override        |
+|---------|-------|-----------------|
+| UI      | 58470 | `VITE_PORT` in `.env` |
+| API     | 58471 | `SERVER_PORT` in `.env` |
+
+If **58470** is busy, `npm run init` picks the next free port and prints it (it never steals `SERVER_PORT`).
+
+---
+
+## CLI reference
+
+| Command | Description |
+|---------|-------------|
+| `kanbam-code create [dir] [git-url]` | Clone + `npm install` into `./dir` (default dir: `kanbam-code`) |
+| `kanbam-code init` | Same as `npm run init` when run inside a clone |
+| `kanbam-code --help` | Show usage |
+
+---
+
+## npm scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run init` | `.env` bootstrap if needed, then API + UI |
+| `npm start` | Same as `init` |
+| `npm run dev` | Vite only (API must already be running) |
+| `npm run server` | Express only |
+| `npm run build` | Production build of the frontend |
+| `npm run lint` | `tsc --noEmit` |
+
+---
+
+## Configuration
+
+See **`.env.example`**. Secrets stay in environment variables or `.env` — never commit them.
+
+---
+
+## Troubleshooting
+
+**`404 Not Found - GET https://registry.npmjs.org/kanbam-code`**
+
+- The app is **not published** to npm. `npx kanbam-code` looks there first and fails.
+- **First-time setup from another folder:**  
+  `npx --package=github:tiagornandrade/kanbam-code kanbam-code create my-dashboard`  
+  then `cd my-dashboard && npm run init`.
+- **Already in a clone:** `npm install` then `npx kanbam-code init` or `npm run init`.
+
+**There is no `kanbam-code install` command**
+
+- Use **`create`** (clone + `npm install`) or run **`npm install`** yourself inside the repo.
+
+**`npx` cannot find the package**
+
+- Use the full form: `npx --package=github:OWNER/kanbam-code kanbam-code create …`
+- You need network access to GitHub.
+
+**`git clone` fails**
+
+- Install [Git](https://git-scm.com/) and check the repository URL (fork / `KANBAM_CODE_REPO`).
+
+**Port already in use**
+
+- Free **58471** (or your `SERVER_PORT`) for the API, or change it in `.env`.
+- For the UI, `init` usually auto-picks another port; or set `VITE_PORT`.
+
+**Old `.env` still has `SERVER_PORT=3001`**
+
+- The app keeps using that value until you align with **58471** / **58470** or refresh `.env` from `.env.example`.
+
+---
+
+## Note
+
+This repo was originally scaffolded for AI Studio; optional `GEMINI_API_KEY` in `.env` is not required for the Jira dashboard.
