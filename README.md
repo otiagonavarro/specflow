@@ -3,9 +3,22 @@
 
 **Jira-integrated kanban UI + local Express API.** The browser never holds Jira tokens; the server reads them from `.env` or from in-app Settings.
 
+**Repository:** [github.com/tiagornandrade/kanbam-code](https://github.com/tiagornandrade/kanbam-code)
+
 **Works on macOS, Windows, and Linux** (Node.js + Git for the `create` flow).
 
 **Not on the public npm registry.** Bare `npx kanbam-code …` will 404. Either use **`npx --package=github:tiagornandrade/kanbam-code kanbam-code …`** (see below) or clone the repo and run commands locally.
+
+---
+
+## Features
+
+- **Issues, My Issues, Inbox, Epics, Projects** — list and board views, filters, and Jira-backed pagination.
+- **Board metrics** — throughput, lead-time distribution, scatter plot, and sprint-aware summaries when the board has an active sprint. Metrics use **historical Jira data** (created and resolution dates) over a **configurable window** (e.g. 90–1095 days) on the dashboard; the API paginates results and applies a **safety cap** on sample size so very large sites stay bounded (details and copy live in the in-app “How metrics are calculated” section).
+- **Settings** — Jira domain, project key, board id, and API token are stored for the **server** only (never exposed to the client bundle).
+- **CLI** — `kanbam-code create` clones and installs; `kanbam-code init` runs the same stack as `npm run init` from inside a clone.
+
+The **user interface language** is Brazilian Portuguese; code and this README stay in English.
 
 ---
 
@@ -70,6 +83,8 @@ node bin/kanbam-code.mjs init
 
 - UI loads at the host/port Vite prints (default **http://localhost:58470**).
 - API health: **http://localhost:58471/api/health** (or your `SERVER_PORT`).
+- In the app, open **Projects**, pick a board, and open **metrics** to confirm Jira data and the history window selector.
+- Typecheck: **`npm run lint`**.
 
 ---
 
@@ -115,6 +130,9 @@ If **58470** is busy, `npm run init` picks the next free port and prints it (it 
 | `npm run dev` | Vite only (API must already be running) |
 | `npm run server` | Express only |
 | `npm run build` | Production build of the frontend |
+| `npm run preview` | Preview the production build locally |
+| `npm run clean` | Remove `dist/` |
+| `npm run list` | Print all npm scripts (same as `npm run`) |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
