@@ -89,6 +89,33 @@ export type OpenspecRunAction =
 
 export type OpenspecInstructionArtifact = 'proposal' | 'specs' | 'design' | 'tasks';
 
+export async function openIdeFolderOnServer(body: {
+  ide: 'cursor' | 'vscode';
+  repoName: string;
+  newWindow?: boolean;
+}): Promise<{ ok: boolean; error?: string; message?: string }> {
+  const res = await fetch('/api/workspace/open-ide', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+  };
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: typeof data.error === 'string' ? data.error : 'request_failed',
+      message: typeof data.message === 'string' ? data.message : `Request failed (${res.status})`,
+    };
+  }
+
+  return { ok: data.ok === true };
+}
+
 export async function runOpenspecCliOnServer(body: {
   repoName: string;
   action: OpenspecRunAction;

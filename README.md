@@ -50,18 +50,37 @@ npm run init
 
 Same as **`npm start`**.
 
-### Start only (from inside the repo)
+### Start from any folder (npx)
 
-After **`npm install`** in the clone, from the project root **or any subfolder**:
+The package is **not** on the public npm registry. Use GitHub as the package source:
 
 ```bash
-npx kanbam-code init
+npx --package=github:tiagornandrade/kanbam-code kanbam-code init
 ```
 
-That uses the local `bin` from this package. Without installing dependencies, run:
+Point at your clone (keeps `.env`, Jira settings, and `LOCAL_REPOS_ROOT`):
 
 ```bash
-node bin/kanbam-code.mjs init
+npx --package=github:tiagornandrade/kanbam-code kanbam-code init ~/projects/kanbam-code
+```
+
+Or set once in your shell profile:
+
+```bash
+export KANBAM_CODE_HOME=~/projects/kanbam-code
+npx --package=github:tiagornandrade/kanbam-code kanbam-code init
+```
+
+> Bare `npx kanbam-code` will 404. Always pass `--package=github:…`.
+
+### Start only (from inside the repo)
+
+After **`npm install`** in the clone:
+
+```bash
+npm run init
+# or
+npx kanbam-code init
 ```
 
 ---

@@ -18,7 +18,7 @@
     "init": "node scripts/run-init.mjs",
     "start": "node scripts/run-init.mjs",
     "dev": "vite --port=58470 --host=0.0.0.0 --strictPort",
-    "server": "tsx --tsconfig tsconfig.server.json server/index.ts",
+    "server": "tsx watch --tsconfig tsconfig.server.json server/index.ts",
     "test:jira-env": "tsx --tsconfig tsconfig.server.json server/scripts/test-jira-env.ts",
     "build": "vite build",
     "preview": "vite preview",
