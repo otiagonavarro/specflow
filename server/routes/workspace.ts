@@ -8,6 +8,7 @@ import {
   runOpenspecCli,
   sanitizeDescription,
 } from '../openspecRunner.js';
+import { launchIdeFolder, type IdeLauncherId } from '../ideLauncher.js';
 
 const router = Router();
 
@@ -230,5 +231,35 @@ function respondRunResult(
     stderr: result.stderr,
   });
 }
+
+const IDE_LAUNCHER_IDS = new Set<IdeLauncherId>(['cursor', 'vscode']);
+
+router.post('/open-ide', async (req: Request, res: Response) => {
+  const body = req.body as { ide?: string; repoName?: string; newWindow?: boolean };
+  const ide = String(body.ide ?? '').trim() as IdeLauncherId;
+  const repoName = String(body.repoName ?? '').trim();
+  const newWindow = body.newWindow === true;
+
+  if (!IDE_LAUNCHER_IDS.has(ide)) {
+    return res.status(400).json({ error: 'invalid_ide' });
+  }
+  if (!repoName) {
+    return res.status(400).json({ error: 'invalid_body', message: 'repoName is required.' });
+  }
+
+  const resolved = resolveLocalRepoPath(repoName);
+  if ('error' in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  const launched = await launchIdeFolder(ide, resolved.repoPath, { newWindow });
+  if (launched.ok === false) {
+    console.error('[open-ide] failed:', ide, resolved.repoPath, launched.message);
+    return res.status(500).json({ error: 'launch_failed', message: launched.message });
+  }
+
+  console.info('[open-ide] launched:', ide, resolved.repoPath, newWindow ? '(new window)' : '');
+  return res.json({ ok: true, newWindow, path: resolved.repoPath });
+});
 
 export default router;

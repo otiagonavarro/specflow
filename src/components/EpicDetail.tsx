@@ -10,8 +10,6 @@ import { useLocale, interpolate } from '../locales';
 import IssueDetailModal from './IssueDetailModal';
 import PaginationBar from './PaginationBar';
 import { AvatarImage } from './AvatarImage';
-import OpenSpecMenu from './OpenSpecMenu';
-
 export interface EpicDetailEpic {
   id: string;
   name: string;
@@ -83,9 +81,6 @@ export default function EpicDetail({ epic, onProposalClick }: EpicDetailProps) {
                   />
                   <span className="text-xs text-zinc-400 font-bold tracking-tight">{epic.status}</span>
                 </div>
-              </div>
-              <div className="shrink-0 w-full min-[520px]:w-auto min-[520px]:max-w-full flex justify-start min-[520px]:justify-end">
-                <OpenSpecMenu scope="epic" jiraKey={epic.code} contextTitle={epic.name} />
               </div>
             </div>
 
@@ -199,9 +194,6 @@ export default function EpicDetail({ epic, onProposalClick }: EpicDetailProps) {
                       ariaLabel={task.assignee || undefined}
                     />
                     <span className="text-[11px] text-zinc-400 font-bold truncate">{task.assignee || '—'}</span>
-                  </div>
-                  <div onClick={(e) => e.stopPropagation()} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <OpenSpecMenu scope="issue" jiraKey={task.code} compact contextTitle={task.title} />
                   </div>
                   <button
                     type="button"

@@ -21,16 +21,33 @@ function readPackageJson(dir) {
   }
 }
 
+function isKanbamRoot(dir) {
+  return readPackageJson(dir)?.name === 'kanbam-code';
+}
+
 function findAppRoot(start = process.cwd()) {
   let dir = path.resolve(start);
   for (;;) {
-    const j = readPackageJson(dir);
-    if (j?.name === 'kanbam-code') return dir;
+    if (isKanbamRoot(dir)) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
   return null;
+}
+
+function resolveInitRoot(explicitDir) {
+  if (explicitDir?.trim()) {
+    return path.resolve(process.cwd(), explicitDir.trim());
+  }
+  const home = process.env.KANBAM_CODE_HOME?.trim();
+  if (home) return path.resolve(home);
+  return findAppRoot() ?? bundleRoot;
+}
+
+function isLikelyNpxCache(dir) {
+  const norm = dir.replace(/\\/g, '/');
+  return norm.includes('/_npx/') || norm.includes('/.npm/_npx/');
 }
 
 function getCloneUrl(explicit) {
@@ -54,16 +71,23 @@ function usage() {
 Not on npmjs.org — bare "npx kanbam-code" will 404. Use --package=github:… (see below).
 
 Commands:
-  kanbam-code init          Start API + UI (run inside the cloned repo; works from any subfolder)
+  kanbam-code init [dir]    Start API + UI (optional path to your clone)
   kanbam-code create [dir] [git-url]
                             Clone into ./dir (default: kanbam-code), then npm install
 
-Install from any parent folder (replace OWNER with your GitHub user or org):
+From ANY folder (replace OWNER with your GitHub user or org):
+
+  npx --package=github:OWNER/kanbam-code kanbam-code init
+  npx --package=github:OWNER/kanbam-code kanbam-code init ~/projects/kanbam-code
+
+Persistent install path (optional, then "init" with no args works anywhere):
+
+  export KANBAM_CODE_HOME=~/projects/kanbam-code
+
+First-time setup:
+
   npx --package=github:OWNER/kanbam-code kanbam-code create my-dashboard
   cd my-dashboard && npm run init
-
-Or clone manually:
-  git clone https://github.com/OWNER/kanbam-code.git && cd kanbam-code && npm install && npm run init
 `);
 }
 
@@ -87,13 +111,35 @@ if (!cmd || cmd === '-h' || cmd === '--help' || cmd === 'help') {
 }
 
 if (cmd === 'init' || cmd === 'start') {
-  const root = findAppRoot();
-  if (!root) {
+  const root = resolveInitRoot(arg1);
+  if (!isKanbamRoot(root)) {
     console.error(
-      '[kanbam-code] Not inside a kanbam-code clone. Create one first:\n  kanbam-code create <folder>\n  cd <folder> && npm run init'
+      `[kanbam-code] Not a kanbam-code install: ${root}\n` +
+        'Use an existing clone path, or create one:\n' +
+        '  npx --package=github:OWNER/kanbam-code kanbam-code create my-dashboard'
     );
     process.exit(1);
   }
+
+  if (!fs.existsSync(path.join(root, 'node_modules'))) {
+    console.log('[kanbam-code] node_modules missing — running npm install …');
+    try {
+      execFileSync('npm', ['install'], { cwd: root, stdio: 'inherit', shell });
+    } catch {
+      console.error('[kanbam-code] npm install failed.');
+      process.exit(1);
+    }
+  }
+
+  if (isLikelyNpxCache(root) && !fs.existsSync(path.join(root, '.env'))) {
+    console.warn(
+      '[kanbam-code] Starting from the npx cache without .env — Jira settings will be empty.\n' +
+        '  Prefer: kanbam-code init /path/to/your/clone\n' +
+        '  Or: export KANBAM_CODE_HOME=/path/to/your/clone'
+    );
+  }
+
+  console.log(`[kanbam-code] Starting from ${root}`);
   runInit(root);
 } else if (cmd === 'create') {
   const dirName = arg1?.trim() || 'kanbam-code';
@@ -119,7 +165,9 @@ if (cmd === 'init' || cmd === 'start') {
   }
   const rel = path.relative(process.cwd(), target);
   const cdPath = rel && !rel.startsWith('..') ? rel : dirName;
-  console.log(`\n[kanbam-code] Done.\n  cd ${cdPath}\n  npm run init\n`);
+  console.log(
+    `\n[kanbam-code] Done.\n  export KANBAM_CODE_HOME="${target}"\n  npx --package=github:OWNER/kanbam-code kanbam-code init\n  # or: cd ${cdPath} && npm run init\n`
+  );
 } else {
   usage();
   process.exit(1);

@@ -140,7 +140,13 @@ export default function IssueDetailModal({ open, issue, onClose }: IssueDetailMo
             </h2>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-start min-[560px]:justify-end w-full min-[560px]:w-auto">
-            <OpenSpecMenu scope="issue" jiraKey={active.code} contextTitle={active.title} />
+            <OpenSpecMenu
+              scope="issue"
+              jiraKey={active.code}
+              issueTitle={active.title}
+              description={description}
+              descriptionLoading={loadingDetail}
+            />
             {active.jiraUrl && (
               <a
                 href={active.jiraUrl}
@@ -221,7 +227,6 @@ export default function IssueDetailModal({ open, issue, onClose }: IssueDetailMo
                           {st.status}
                         </span>
                         <div className="flex items-center gap-1 shrink-0 ml-auto">
-                          <OpenSpecMenu scope="subtask" jiraKey={st.key} compact contextTitle={st.summary} />
                           <a
                             href={st.jiraUrl}
                             target="_blank"

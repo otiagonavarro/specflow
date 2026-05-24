@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import jiraRouter from './routes/jira.js';
 import githubRouter from './routes/github.js';
 import workspaceRouter from './routes/workspace.js';
+import specRouter from './routes/spec.js';
 import configRouter from './routes/config.js';
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -25,12 +26,14 @@ app.use('/api/config', configRouter);
 app.use('/api/jira', jiraRouter);
 app.use('/api/github', githubRouter);
 app.use('/api/workspace', workspaceRouter);
+app.use('/api/spec', specRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     jira: !!(process.env.JIRA_DOMAIN && process.env.JIRA_EMAIL && process.env.JIRA_API_TOKEN),
     localReposRoot: !!process.env.LOCAL_REPOS_ROOT?.trim(),
+    nvidiaSpec: true,
   });
 });
 
