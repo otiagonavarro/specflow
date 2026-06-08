@@ -63,6 +63,30 @@ npm run init
 
 Same as **`npm start`**.
 
+### Install globally (no `npx` each time)
+
+The package isn't on the public npm registry yet, but you can still install the `kanbam-code` command globally:
+
+```bash
+# Option A — straight from GitHub
+npm install -g github:tiagornandrade/kanbam-code
+
+# Option B — from a local clone (symlinks the repo as the global bin)
+git clone https://github.com/tiagornandrade/kanbam-code.git
+cd kanbam-code && npm install
+npm link
+```
+
+Either way, the `kanbam-code` command becomes available everywhere:
+
+```bash
+kanbam-code create my-dashboard
+kanbam-code init
+kanbam-code --help
+```
+
+> Once published to npm, this becomes simply `npm install -g kanbam-code`.
+
 ### Start from any folder (npx)
 
 The package is **not** on the public npm registry. Use GitHub as the package source:
