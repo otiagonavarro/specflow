@@ -6,7 +6,9 @@ import {
   reloadDotenv,
   JIRA_ENV_KEYS,
   GITHUB_ENV_KEYS,
+  LLM_ENV_KEYS,
 } from '../envFile.js';
+import { isLlmProvider } from '../llmConfig.js';
 
 const router = Router();
 
@@ -20,6 +22,12 @@ interface JiraPostBody {
 
 interface GithubPostBody {
   localReposPath?: string;
+}
+
+interface LlmPostBody {
+  provider: string;
+  model?: string;
+  apiKey?: string;
 }
 
 router.get('/', (_req: Request, res: Response) => {
@@ -44,7 +52,13 @@ router.get('/', (_req: Request, res: Response) => {
 
     const github = localReposPath ? { localReposPath } : null;
 
-    res.json({ jira, github });
+    const llm = {
+      provider: process.env.LLM_PROVIDER?.trim() || 'nvidia',
+      model: process.env.LLM_MODEL?.trim() || '',
+      apiKeyConfigured: !!process.env.LLM_API_KEY?.trim(),
+    };
+
+    res.json({ jira, github, llm });
   } catch (err) {
     console.error('[config] read error:', err);
     res.status(500).json({ error: String(err) });
@@ -56,6 +70,7 @@ router.post('/', (req: Request, res: Response) => {
     const body = req.body as {
       jira?: null | JiraPostBody;
       github?: null | GithubPostBody;
+      llm?: null | LlmPostBody;
     };
 
     const env = readEnvMap();
@@ -103,6 +118,30 @@ router.post('/', (req: Request, res: Response) => {
       }
     }
 
+    if ('llm' in body) {
+      if (body.llm === null) {
+        deleteKeys(env, LLM_ENV_KEYS);
+      } else {
+        const l = body.llm;
+        const provider = String(l.provider || '').trim().toLowerCase();
+        if (isLlmProvider(provider)) {
+          if (provider === 'nvidia') {
+            delete env.LLM_PROVIDER;
+          } else {
+            env.LLM_PROVIDER = provider;
+          }
+          const model = String(l.model ?? '').trim();
+          if (model) env.LLM_MODEL = model;
+          else delete env.LLM_MODEL;
+          if (Object.prototype.hasOwnProperty.call(l, 'apiKey')) {
+            const key = l.apiKey ?? '';
+            if (key) env.LLM_API_KEY = key;
+            else delete env.LLM_API_KEY;
+          }
+        }
+      }
+    }
+
     writeEnvMap(env);
     reloadDotenv();
     res.json({ ok: true });
@@ -115,7 +154,7 @@ router.post('/', (req: Request, res: Response) => {
 router.delete('/', (_req: Request, res: Response) => {
   try {
     const env = readEnvMap();
-    deleteKeys(env, [...JIRA_ENV_KEYS, ...GITHUB_ENV_KEYS]);
+    deleteKeys(env, [...JIRA_ENV_KEYS, ...GITHUB_ENV_KEYS, ...LLM_ENV_KEYS]);
     writeEnvMap(env);
     reloadDotenv();
     res.json({ ok: true });

@@ -45,6 +45,8 @@ export interface JiraTransition {
   to: { name: string };
 }
 
+export type LlmProvider = 'nvidia' | 'openai' | 'anthropic';
+
 export interface IntegrationConfig {
   jira: {
     domain: string;
@@ -57,6 +59,11 @@ export interface IntegrationConfig {
   github: {
     localReposPath: string;
   } | null;
+  llm: {
+    provider: LlmProvider;
+    model: string;
+    apiKeyConfigured: boolean;
+  };
 }
 
 export interface IntegrationSavePayload {
@@ -69,5 +76,10 @@ export interface IntegrationSavePayload {
   };
   github: null | {
     localReposPath: string;
+  };
+  llm?: null | {
+    provider: LlmProvider;
+    model?: string;
+    apiKey?: string;
   };
 }

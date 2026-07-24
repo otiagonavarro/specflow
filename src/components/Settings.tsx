@@ -15,7 +15,13 @@ import { fetchProjects, invalidateCache } from '../api/jira';
 import { useJiraMyself } from '../hooks/useJiraMyself';
 import { AvatarImage } from './AvatarImage';
 import { fetchLocalRepoFolders, type LocalRepoFolder } from '../api/workspace';
-import type { IntegrationConfig, IntegrationSavePayload } from '../api/types';
+import type { IntegrationConfig, IntegrationSavePayload, LlmProvider } from '../api/types';
+
+const LLM_PROVIDER_OPTIONS: { value: LlmProvider; label: string; defaultModel: string }[] = [
+  { value: 'nvidia', label: 'NVIDIA (padrão)', defaultModel: 'meta/llama-3.1-8b-instruct' },
+  { value: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o-mini' },
+  { value: 'anthropic', label: 'Anthropic', defaultModel: 'claude-3-5-sonnet-latest' },
+];
 
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Zap },
@@ -182,6 +188,12 @@ function IntegrationsSection() {
   const [reposRootDetail, setReposRootDetail] = useState('');
   const [workspaceRepoPreview, setWorkspaceRepoPreview] = useState<LocalRepoFolder[]>([]);
 
+  const [llmProvider, setLlmProvider] = useState<LlmProvider>(config.llm?.provider || 'nvidia');
+  const [llmModel, setLlmModel] = useState(config.llm?.model || '');
+  const [llmApiKey, setLlmApiKey] = useState('');
+  const [llmApiKeyConfigured, setLlmApiKeyConfigured] = useState(!!config.llm?.apiKeyConfigured);
+  const [llmApiKeyDirty, setLlmApiKeyDirty] = useState(false);
+
   useEffect(() => {
     loadConfigFromServer().then((serverConfig) => {
       if (serverConfig.jira) {
@@ -206,6 +218,13 @@ function IntegrationsSection() {
         setReposRootStatus('ok');
         setReposRootDetail('Salvo');
       }
+      if (serverConfig.llm) {
+        setLlmProvider(serverConfig.llm.provider);
+        setLlmModel(serverConfig.llm.model);
+        setLlmApiKey('');
+        setLlmApiKeyDirty(false);
+        setLlmApiKeyConfigured(serverConfig.llm.apiKeyConfigured);
+      }
     });
   }, []);
 
@@ -218,6 +237,9 @@ function IntegrationsSection() {
     const pathTrim = localReposPath.trim();
     const workspaceReady = pathTrim.length > 0;
 
+    const modelTrim = llmModel.trim();
+    const llmIsDefault = llmProvider === 'nvidia' && !modelTrim && !llmApiKeyDirty;
+
     return {
       jira: jiraReady
         ? {
@@ -229,6 +251,13 @@ function IntegrationsSection() {
           }
         : null,
       github: workspaceReady ? { localReposPath: pathTrim } : null,
+      llm: llmIsDefault
+        ? null
+        : {
+            provider: llmProvider,
+            model: modelTrim,
+            ...(llmApiKeyDirty ? { apiKey: llmApiKey } : {}),
+          },
     };
   };
 
@@ -249,6 +278,13 @@ function IntegrationsSection() {
       setLocalReposPath(c.github.localReposPath);
     } else {
       setLocalReposPath('');
+    }
+    if (c.llm) {
+      setLlmProvider(c.llm.provider);
+      setLlmModel(c.llm.model);
+      setLlmApiKey('');
+      setLlmApiKeyDirty(false);
+      setLlmApiKeyConfigured(c.llm.apiKeyConfigured);
     }
   };
 
@@ -316,6 +352,11 @@ function IntegrationsSection() {
     setReposRootStatus('idle');
     setReposRootDetail('');
     setWorkspaceRepoPreview([]);
+    setLlmProvider('nvidia');
+    setLlmModel('');
+    setLlmApiKey('');
+    setLlmApiKeyDirty(false);
+    setLlmApiKeyConfigured(false);
   };
 
   return (
@@ -390,6 +431,68 @@ function IntegrationsSection() {
               id.atlassian.com
             </a>
             . As credenciais são gravadas no arquivo <code className="text-zinc-500">.env</code> na raiz do projeto; o proxy usa essas variáveis no servidor (nada de segredo é enviado do navegador para o Jira).
+          </p>
+        </div>
+      </div>
+
+      {/* LLM provider */}
+      <div className="py-4 border-b border-outline-variant/5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-white">LLM (geração de spec)</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5">
+              Provedor usado para gerar specs a partir de issues do Jira. Padrão: NVIDIA (chave embutida no servidor).
+            </p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-600">Provedor</label>
+              <select
+                value={llmProvider}
+                onChange={(e) => {
+                  const next = e.target.value as LlmProvider;
+                  setLlmProvider(next);
+                  if (next === 'nvidia') {
+                    setLlmApiKey('');
+                    setLlmApiKeyDirty(false);
+                  }
+                }}
+                className="w-full bg-surface-highest text-white text-xs font-bold px-3 py-2 rounded-lg border border-outline-variant/10 focus:border-primary/30 outline-none cursor-pointer transition-colors"
+              >
+                {LLM_PROVIDER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-600">Modelo</label>
+              <input
+                value={llmModel}
+                onChange={(e) => setLlmModel(e.target.value)}
+                placeholder={LLM_PROVIDER_OPTIONS.find((o) => o.value === llmProvider)?.defaultModel}
+                className="w-full bg-surface-highest text-zinc-300 text-xs font-mono px-3 py-2 rounded-lg border border-outline-variant/10 focus:border-primary/30 outline-none transition-colors placeholder:text-zinc-700"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-600">
+              API Key {llmProvider === 'nvidia' && <span className="normal-case font-normal text-zinc-700">(opcional — usa a chave padrão do servidor se vazio)</span>}
+            </label>
+            <SecretInput
+              value={llmApiKey}
+              onChange={(v) => {
+                setLlmApiKey(v);
+                setLlmApiKeyDirty(true);
+              }}
+              placeholder={llmApiKeyConfigured ? '(inalterado — já salvo no .env)' : '••••••••••••••••'}
+            />
+          </div>
+          <p className="text-[10px] text-zinc-700">
+            Ao trocar para OpenAI ou Anthropic, a API Key é obrigatória. As credenciais são gravadas no <code className="text-zinc-500">.env</code> na raiz do projeto (uso apenas no servidor).
           </p>
         </div>
       </div>
