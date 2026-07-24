@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Typecheck (client + server)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck client (tsconfig.json)
+        run: npm run lint
+
+      - name: Typecheck server (tsconfig.server.json)
+        run: npx tsc --noEmit -p tsconfig.server.json
+
+  build:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (vite build)
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  markdownlint:
+    name: Lint Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed markdown files
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          else
+            BASE="HEAD~1"
+          fi
+          git diff --name-status -M "$BASE"...HEAD -- '*.md' 'docs/**/*.md' '.github/**/*.md' \
+            | grep -v '^R100' | awk -F'\t' '{print $NF}' > all_changed_md_files.txt || true
+          : > changed_md_files.txt
+          while IFS= read -r file; do
+            [ -n "$file" ] && [ -f "$file" ] && echo "$file" >> changed_md_files.txt
+          done < all_changed_md_files.txt
+          COUNT=$(wc -l < changed_md_files.txt | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Run markdownlint on changed files
+        if: steps.changed.outputs.count != '0'
+        run: |
+          FILES=$(cat changed_md_files.txt | tr '\n' ' ')
+          echo "Lintando ${{ steps.changed.outputs.count }} arquivo(s): $FILES"
+          npx --yes markdownlint-cli2 $FILES
+
+      - name: No markdown files changed
+        if: steps.changed.outputs.count == '0'
+        run: echo "Nenhum arquivo .md alterado — lint ignorado."

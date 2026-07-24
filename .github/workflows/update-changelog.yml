@@ -1,0 +1,58 @@
+name: Update Changelog
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-changelog
+  cancel-in-progress: false
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    name: Update CHANGELOG.md
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Update CHANGELOG.md
+        run: python tools/update_changelog.py
+
+      - name: Open PR with changelog update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          BRANCH="chore/update-changelog-$(date +%Y%m%d%H%M%S)"
+          git checkout -b "$BRANCH"
+          git commit -m "docs: update CHANGELOG.md from git log"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "docs: update CHANGELOG.md" \
+            --body "Automated changelog update generated from recent commits on \`main\`." \
+            --base main \
+            --head "$BRANCH" \
+            --label "changelog" \
+            || echo "PR already exists or could not be created"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

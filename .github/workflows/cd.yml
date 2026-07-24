@@ -1,0 +1,92 @@
+# PROPOSTA — revise antes de commitar/mesclar.
+#
+# Este repo é uma ferramenta local (CLI + servidor Express) sem alvo de deploy
+# hospedado — não há Dockerfile, Cloud Run, Vercel, etc. Distribuição é via
+# clone/npx --package=github:... (ver README), não npm registry.
+#
+# Por isso o "CD" aqui não é deploy de serviço nem publish no npm, é apenas
+# *entrega* do build: ao empurrar uma tag `vX.Y.Z`, builda o frontend, empacota
+# `dist/` e cria uma GitHub Release com o trecho correspondente do CHANGELOG.md.
+
+name: CD
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck client (tsconfig.json)
+        run: npm run lint
+
+      - name: Typecheck server (tsconfig.server.json)
+        run: npx tsc --noEmit -p tsconfig.server.json
+
+      - name: Build (vite build)
+        run: npm run build
+
+      - name: Package dist as zip
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          zip -r "kanbam-code-${VERSION:-dev}.zip" dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-zip
+          path: '*.zip'
+          retention-days: 14
+
+  github-release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-zip
+
+      - name: Extract changelog section for this tag
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo 'body<<EOF'
+            awk -v ver="$VERSION" '
+              BEGIN { found=0 }
+              /^## / { if (found) exit; if ($0 ~ ver) found=1; next }
+              found { print }
+            ' CHANGELOG.md
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.zip'
+          body: ${{ steps.notes.outputs.body || format('Release {0}', github.ref_name) }}
+          generate_release_notes: true
