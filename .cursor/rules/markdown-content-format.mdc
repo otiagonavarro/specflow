@@ -1,0 +1,21 @@
+---
+description: Markdown structure for content/ — pipe tables and spacing (project formatting conventions)
+globs: content/**/*.md
+alwaysApply: false
+---
+
+# Markdown under `content/`
+
+When **creating or editing** these files, follow the project skill **`markdown-formatting`** (`.cursor/skills/markdown-formatting/SKILL.md`).
+
+**Tables (required):** every table must have a header row immediately followed by a separator row in this shape:
+
+```markdown
+| Coluna A | Coluna B | Coluna C |
+| -- | ------ | -------- |
+| valor | valor | valor |
+```
+
+Extend dash runs per column to align with header width when helpful. Canonical reference in-repo: `content/Data Engineering/Platform/Inventory/blend-risk-credit/plano-mitigacao.md` (section “### 2. BigQuery” — header `| ID | Ponto de falha | Manifestação típica |` plus `| -- | -------------- | ------------------- |`).
+
+Before merge or Confluence publish, also apply **`markdown-confluence-publish`** validation.
