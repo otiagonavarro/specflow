@@ -456,7 +456,12 @@ type BoardMetricsAgg = {
   completedInWindow: number;
   avgLeadTimeDays: number | null;
   medianLeadTimeDays: number | null;
-  throughputByWeek: Array<{ weekLabel: string; weekStartIso: string; count: number }>;
+  throughputByWeek: Array<{
+    weekLabel: string;
+    weekStartIso: string;
+    count: number;
+    byType: Record<string, number>;
+  }>;
   leadTimeHistogram: Array<{ bucket: string; count: number }>;
   byIssueType: Array<{ type: string; count: number }>;
   scatter: Array<{ key: string; resolvedIso: string; leadDays: number }>;
@@ -478,7 +483,10 @@ function aggregateResolvedMetricsInResolutionWindow(
   let completedLast30d = 0;
   let completedInWindow = 0;
 
-  const weekMap = new Map<string, { label: string; startIso: string; count: number }>();
+  const weekMap = new Map<
+    string,
+    { label: string; startIso: string; count: number; byType: Record<string, number> }
+  >();
   const typeMap = new Map<string, number>();
   const hist = { d1: 0, d3: 0, d7: 0, d14: 0, more: 0 };
   const scatter: Array<{ key: string; resolvedIso: string; leadDays: number }> = [];
@@ -507,8 +515,9 @@ function aggregateResolvedMetricsInResolutionWindow(
 
     const wk = startOfWeekUtcMonday(res);
     const wkKey = wk.toISOString().slice(0, 10);
-    const prev = weekMap.get(wkKey) || { label: weekLabelEn(res), startIso: wkKey, count: 0 };
+    const prev = weekMap.get(wkKey) || { label: weekLabelEn(res), startIso: wkKey, count: 0, byType: {} };
     prev.count += 1;
+    prev.byType[r.issuetype] = (prev.byType[r.issuetype] || 0) + 1;
     weekMap.set(wkKey, prev);
 
     typeMap.set(r.issuetype, (typeMap.get(r.issuetype) || 0) + 1);
@@ -526,7 +535,7 @@ function aggregateResolvedMetricsInResolutionWindow(
 
   const throughputByWeek = [...weekMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, v]) => ({ weekLabel: v.label, weekStartIso: v.startIso, count: v.count }));
+    .map(([, v]) => ({ weekLabel: v.label, weekStartIso: v.startIso, count: v.count, byType: v.byType }));
 
   const leadTimeHistogram = [
     { bucket: '≤1d', count: hist.d1 },
