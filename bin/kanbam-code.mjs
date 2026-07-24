@@ -74,6 +74,8 @@ Commands:
   kanbam-code init [dir]    Start API + UI (optional path to your clone)
   kanbam-code create [dir] [git-url]
                             Clone into ./dir (default: kanbam-code), then npm install
+  kanbam-code update [dir] Update an existing install (git clone: git pull + npm install;
+                            global "npm install -g": reinstalls the latest from GitHub)
 
 From ANY folder (replace OWNER with your GitHub user or org):
 
@@ -168,6 +170,55 @@ if (cmd === 'init' || cmd === 'start') {
   console.log(
     `\n[kanbam-code] Done.\n  export KANBAM_CODE_HOME="${target}"\n  npx --package=github:OWNER/kanbam-code kanbam-code init\n  # or: cd ${cdPath} && npm run init\n`
   );
+} else if (cmd === 'update') {
+  const root = resolveInitRoot(arg1);
+  if (!isKanbamRoot(root)) {
+    console.error(
+      `[kanbam-code] Not a kanbam-code install: ${root}\n` +
+        'Pass the path to your clone, or set KANBAM_CODE_HOME.'
+    );
+    process.exit(1);
+  }
+
+  const isGitClone = fs.existsSync(path.join(root, '.git'));
+
+  if (isGitClone) {
+    console.log(`[kanbam-code] git pull in ${root} …`);
+    try {
+      execFileSync('git', ['pull', '--ff-only'], { cwd: root, stdio: 'inherit' });
+    } catch {
+      console.error(
+        '[kanbam-code] git pull failed (local changes or diverged history?). Resolve manually, e.g.:\n' +
+          `  cd ${root} && git status`
+      );
+      process.exit(1);
+    }
+    console.log('[kanbam-code] npm install …');
+    try {
+      execFileSync('npm', ['install'], { cwd: root, stdio: 'inherit', shell });
+    } catch {
+      console.error('[kanbam-code] npm install failed.');
+      process.exit(1);
+    }
+    console.log('[kanbam-code] Up to date.');
+  } else if (isLikelyNpxCache(root)) {
+    console.log(
+      '[kanbam-code] Running from the npx cache — nothing to update here.\n' +
+        '  Each "npx --package=github:…" run already fetches the latest.\n' +
+        '  For a persistent install: kanbam-code create <dir>, or npm install -g github:OWNER/kanbam-code'
+    );
+  } else {
+    // Assumed global install (npm install -g github:OWNER/kanbam-code).
+    const cloneUrl = getCloneUrl(arg2);
+    console.log(`[kanbam-code] npm install -g ${cloneUrl} …`);
+    try {
+      execFileSync('npm', ['install', '-g', cloneUrl], { stdio: 'inherit', shell });
+    } catch {
+      console.error('[kanbam-code] Global reinstall failed. Try manually:\n' + `  npm install -g ${cloneUrl}`);
+      process.exit(1);
+    }
+    console.log('[kanbam-code] Up to date.');
+  }
 } else {
   usage();
   process.exit(1);

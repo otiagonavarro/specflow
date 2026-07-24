@@ -29,31 +29,158 @@ function MetricCard({ label, value, sub }: { label: string; value: string | numb
   );
 }
 
+const TYPE_COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f472b6', '#60a5fa'];
+const OTHER_COLOR = '#71717a';
+const TOP_TYPE_COUNT = 4;
+
 function ThroughputBars({
   rows,
   emptyLabel,
+  t,
 }: {
   rows: BoardMetricsPayload['throughputByWeek'];
   emptyLabel: string;
+  t: (key: string) => string;
 }) {
-  const max = useMemo(() => Math.max(1, ...rows.map((r) => r.count)), [rows]);
+  const counts = useMemo(() => rows.map((r) => r.count), [rows]);
+
+  const topTypes = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const r of rows) {
+      for (const [type, n] of Object.entries(r.byType || {})) {
+        totals.set(type, (totals.get(type) || 0) + n);
+      }
+    }
+    return [...totals.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP_TYPE_COUNT)
+      .map(([type]) => type);
+  }, [rows]);
+
+  const sortedCounts = useMemo(() => [...counts].sort((a, b) => a - b), [counts]);
+  const median = percentile(sortedCounts, 50);
+  const p85 = percentile(sortedCounts, 85);
+
+  const max = Math.max(1, ...counts, Math.ceil(p85));
+  const gridLines = useMemo(() => {
+    const step = Math.max(1, Math.ceil(max / 4));
+    const lines: number[] = [];
+    for (let v = step; v <= max; v += step) lines.push(v);
+    if (lines[lines.length - 1] !== max) lines.push(max);
+    return lines;
+  }, [max]);
+
   if (rows.length === 0) {
     return <p className="text-xs text-zinc-600 py-8 text-center">{emptyLabel}</p>;
   }
+
+  const BAR_AREA = 140;
+  const fmtStat = (v: number) => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
+
   return (
-    <div className="flex items-end gap-1.5 h-36 px-1 pt-4">
-      {rows.map((r) => (
-        <div key={r.weekStartIso} className="flex-1 min-w-0 flex flex-col items-center gap-1 group">
-          <div
-            className="w-full max-w-[28px] mx-auto rounded-t-md bg-gradient-to-t from-primary/40 to-primary/90 transition-opacity group-hover:opacity-90"
-            style={{ height: `${Math.max(8, (r.count / max) * 100)}%`, minHeight: r.count > 0 ? 8 : 2 }}
-            title={`${r.weekLabel}: ${r.count}`}
-          />
-          <span className="text-[8px] font-bold text-zinc-600 truncate w-full text-center leading-tight">
-            {r.weekLabel.replace(/, \d{4}$/, '')}
-          </span>
+    <div className="pt-4">
+      <div className="flex gap-2">
+        <div className="flex flex-col justify-between text-right shrink-0" style={{ height: BAR_AREA }}>
+          {[...gridLines].reverse().map((v) => (
+            <span key={v} className="text-[9px] font-mono text-zinc-600 leading-none">
+              {v}
+            </span>
+          ))}
+          <span className="text-[9px] font-mono text-zinc-600 leading-none">0</span>
         </div>
-      ))}
+        <div className="flex-1 min-w-0 flex items-end gap-2 px-1 relative" style={{ height: BAR_AREA }}>
+          {gridLines.map((v) => (
+            <div
+              key={v}
+              className="absolute left-0 right-0 border-t border-dashed border-outline-variant/10"
+              style={{ bottom: `${(v / max) * 100}%` }}
+            />
+          ))}
+
+          {p85 > 0 && (
+            <div className="absolute left-0 right-0 z-20 flex items-center" style={{ bottom: `${(p85 / max) * 100}%` }}>
+              <div className="w-full border-t border-dashed" style={{ borderColor: '#fbbf24', opacity: 0.8 }} />
+              <span className="absolute right-0 -translate-y-3 text-[9px] font-bold" style={{ color: '#fbbf24' }}>
+                {t('boardDashboard.throughputP85')} {fmtStat(p85)}
+              </span>
+            </div>
+          )}
+          {median > 0 && (
+            <div className="absolute left-0 right-0 z-20 flex items-center" style={{ bottom: `${(median / max) * 100}%` }}>
+              <div className="w-full border-t" style={{ borderColor: '#e4e4e7', opacity: 0.7 }} />
+              <span className="absolute left-0 -translate-y-3 text-[9px] font-bold text-zinc-300">
+                {t('boardDashboard.throughputMedian')} {fmtStat(median)}
+              </span>
+            </div>
+          )}
+
+          {rows.map((r) => {
+            const otherCount = Math.max(0, r.count - topTypes.reduce((s, ty) => s + (r.byType?.[ty] || 0), 0));
+            const segments = [...topTypes.map((ty) => ({ type: ty, count: r.byType?.[ty] || 0 })), ...(otherCount > 0 ? [{ type: '__other__', count: otherCount }] : [])];
+            return (
+              <div
+                key={r.weekStartIso}
+                className="flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1 group relative z-10"
+              >
+                <span
+                  className={`text-[10px] font-black leading-none ${r.count > 0 ? 'text-zinc-200' : 'text-zinc-700'}`}
+                >
+                  {r.count}
+                </span>
+                <div
+                  className="w-full max-w-[36px] mx-auto flex flex-col-reverse rounded-t-md overflow-hidden shadow-sm transition-opacity group-hover:opacity-90"
+                  title={`${r.weekLabel}: ${r.count}`}
+                >
+                  {segments.map((s, i) => (
+                    <div
+                      key={s.type}
+                      style={{
+                        height: `${(s.count / max) * BAR_AREA}px`,
+                        backgroundColor: s.type === '__other__' ? OTHER_COLOR : TYPE_COLORS[topTypes.indexOf(s.type) % TYPE_COLORS.length],
+                        opacity: 0.9,
+                      }}
+                      className={i === segments.length - 1 ? 'rounded-t-md' : ''}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex gap-2 mt-1.5">
+        <div className="shrink-0" style={{ width: 18 }} />
+        <div className="flex-1 min-w-0 flex gap-2 px-1">
+          {rows.map((r) => (
+            <span
+              key={r.weekStartIso}
+              className="flex-1 min-w-0 text-[9px] font-bold text-zinc-600 truncate text-center leading-tight"
+            >
+              {r.weekLabel.replace(/, \d{4}$/, '')}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-zinc-500 pt-3 mt-1 border-t border-outline-variant/5">
+        {topTypes.map((ty) => (
+          <span key={ty} className="flex items-center gap-1.5">
+            <LegendDot color={TYPE_COLORS[topTypes.indexOf(ty) % TYPE_COLORS.length]} />
+            {ty}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5">
+          <LegendDot color={OTHER_COLOR} />
+          {t('boardDashboard.legendOther')}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <LegendLine color="#e4e4e7" />
+          {t('boardDashboard.throughputMedian')}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <LegendLine color="#fbbf24" dashed />
+          {t('boardDashboard.throughputP85')}
+        </span>
+      </div>
     </div>
   );
 }
@@ -78,33 +205,223 @@ function HistogramBars({ rows }: { rows: BoardMetricsPayload['leadTimeHistogram'
   );
 }
 
-function LeadScatter({ points, title }: { points: BoardMetricsPayload['scatter']; title: string }) {
-  const w = 320;
-  const h = 140;
-  const pad = 24;
+function niceMax(v: number): number {
+  if (v <= 5) return Math.max(1, Math.ceil(v));
+  const magnitude = 10 ** Math.floor(Math.log10(v));
+  const step = magnitude / 2;
+  return Math.ceil(v / step) * step;
+}
+
+function mean(values: number[]): number {
+  return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function stddev(values: number[]): number {
+  if (values.length < 2) return 0;
+  const m = mean(values);
+  return Math.sqrt(mean(values.map((v) => (v - m) ** 2)));
+}
+
+function percentile(sortedValues: number[], p: number): number {
+  if (sortedValues.length === 0) return 0;
+  const idx = (p / 100) * (sortedValues.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sortedValues[lo];
+  return sortedValues[lo] + (sortedValues[hi] - sortedValues[lo]) * (idx - lo);
+}
+
+function StatBadge({ value, label, className }: { value: string; label: string; className?: string }) {
+  return (
+    <div className="flex flex-col items-center px-3">
+      <span className={`text-sm font-black leading-tight ${className ?? 'text-white'}`}>{value}</span>
+      <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600 whitespace-nowrap">{label}</span>
+    </div>
+  );
+}
+
+function LegendDot({ color }: { color: string }) {
+  return <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />;
+}
+
+function LegendLine({ color, dashed }: { color: string; dashed?: boolean }) {
+  return (
+    <svg width="14" height="8" className="shrink-0">
+      <line
+        x1={0}
+        y1={4}
+        x2={14}
+        y2={4}
+        stroke={color}
+        strokeWidth={2}
+        strokeDasharray={dashed ? '3 2' : undefined}
+      />
+    </svg>
+  );
+}
+
+const CHART_COLOR = {
+  issue: '#818cf8',
+  average: '#38bdf8',
+  threshold: '#f87171',
+  percentile: '#a1a1aa',
+  rolling: '#34d399',
+  band: '#34d399',
+};
+
+function LeadTimeControlChart({
+  points,
+  title,
+  locale,
+  t,
+}: {
+  points: BoardMetricsPayload['scatter'];
+  title: string;
+  locale: string;
+  t: (key: string) => string;
+}) {
+  const w = 720;
+  const h = 300;
+  const padL = 34;
+  const padR = 16;
+  const padT = 16;
+  const padB = 30;
+
   if (points.length === 0) {
     return <p className="text-xs text-zinc-600 py-6 text-center">{title}</p>;
   }
-  const maxLead = Math.max(1, ...points.map((p) => p.leadDays));
-  const minT = Math.min(...points.map((p) => new Date(p.resolvedIso).getTime()));
-  const maxT = Math.max(...points.map((p) => new Date(p.resolvedIso).getTime()));
-  const span = Math.max(1, maxT - minT);
 
-  const pts = points.map((p) => {
-    const t = new Date(p.resolvedIso).getTime();
-    const x = pad + ((t - minT) / span) * (w - pad * 2);
-    const y = h - pad - (p.leadDays / maxLead) * (h - pad * 2);
-    return { x, y, key: p.key };
+  const sorted = [...points].sort(
+    (a, b) => new Date(a.resolvedIso).getTime() - new Date(b.resolvedIso).getTime()
+  );
+  const leadValues = sorted.map((p) => p.leadDays);
+  const sortedLeadValues = [...leadValues].sort((a, b) => a - b);
+
+  const avg = mean(leadValues);
+  const dev = stddev(leadValues);
+  const p75 = percentile(sortedLeadValues, 75);
+  const threshold = avg + 2 * dev;
+  const breaches = leadValues.filter((v) => v > threshold).length;
+
+  const rollWindow = Math.max(3, Math.min(7, Math.round(sorted.length / 6)));
+  const rolling = sorted.map((_, i) => {
+    const slice = leadValues.slice(Math.max(0, i - rollWindow + 1), i + 1);
+    return { avg: mean(slice), dev: stddev(slice) };
   });
 
+  const rawMaxLead = Math.max(...leadValues, threshold);
+  const maxLead = niceMax(rawMaxLead);
+  const minT = new Date(sorted[0].resolvedIso).getTime();
+  const maxT = new Date(sorted[sorted.length - 1].resolvedIso).getTime();
+  const span = Math.max(1, maxT - minT);
+
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+
+  const xOf = (t2: number) => padL + (span > 0 ? ((t2 - minT) / span) * plotW : plotW / 2);
+  const yOf = (v: number) => padT + plotH - (Math.max(0, v) / maxLead) * plotH;
+
+  const pts = sorted.map((p, i) => ({
+    x: xOf(new Date(p.resolvedIso).getTime()),
+    y: yOf(p.leadDays),
+    key: p.key,
+    leadDays: p.leadDays,
+    resolvedIso: p.resolvedIso,
+    i,
+  }));
+
+  const bandUpper = pts.map((p, i) => `${p.x},${yOf(rolling[i].avg + rolling[i].dev)}`);
+  const bandLower = pts
+    .map((p, i) => `${p.x},${yOf(rolling[i].avg - rolling[i].dev)}`)
+    .reverse();
+  const bandPath = `${bandUpper.join(' ')} ${bandLower.join(' ')}`;
+  const rollingPath = pts.map((p, i) => `${p.x},${yOf(rolling[i].avg)}`).join(' ');
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxLead * f));
+  const xTickCount = Math.min(5, sorted.length);
+  const xTicks = Array.from({ length: xTickCount }, (_, i) => {
+    const tt = xTickCount === 1 ? minT : minT + (span * i) / (xTickCount - 1);
+    return { t: tt, x: xOf(tt) };
+  });
+
+  const fmtDays = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)}d`;
+
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-md mx-auto text-primary/80" aria-hidden>
-      {pts.map((p) => (
-        <circle key={p.key} cx={p.x} cy={p.y} r={3} fill="currentColor" opacity={0.75} />
-      ))}
-      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="currentColor" strokeOpacity={0.2} strokeWidth={1} />
-      <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="currentColor" strokeOpacity={0.2} strokeWidth={1} />
-    </svg>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-y-2 -mx-3 border-b border-outline-variant/10 pb-3">
+        <StatBadge value={String(sorted.length)} label={t('boardDashboard.scatterItems')} />
+        <StatBadge value={fmtDays(avg)} label={t('boardDashboard.scatterAverage')} className="text-sky-400" />
+        <StatBadge value={fmtDays(threshold)} label={t('boardDashboard.scatterThreshold')} className="text-red-400" />
+        <StatBadge value={String(breaches)} label={t('boardDashboard.scatterBreaches')} className={breaches > 0 ? 'text-amber-400' : 'text-white'} />
+        <StatBadge value={fmtDays(p75)} label={t('boardDashboard.scatterPercentile')} />
+      </div>
+
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label={title}>
+        {yTicks.map((v) => {
+          const y = yOf(v);
+          return (
+            <g key={v}>
+              <line
+                x1={padL}
+                y1={y}
+                x2={w - padR}
+                y2={y}
+                stroke="currentColor"
+                strokeOpacity={0.08}
+                strokeDasharray="3 3"
+                strokeWidth={1}
+                className="text-zinc-400"
+              />
+              <text x={padL - 8} y={y} textAnchor="end" dominantBaseline="middle" className="fill-zinc-500" fontSize={9}>
+                {v}d
+              </text>
+            </g>
+          );
+        })}
+
+        {xTicks.map(({ t: tt, x }) => (
+          <text key={tt} x={x} y={h - padB + 16} textAnchor="middle" className="fill-zinc-500" fontSize={9}>
+            {formatShortDate(new Date(tt).toISOString(), locale).replace(/ de \d{4}$/, '').replace(/, \d{4}$/, '')}
+          </text>
+        ))}
+
+        {/* rolling std-dev band */}
+        <polygon points={bandPath} fill={CHART_COLOR.band} fillOpacity={0.12} stroke="none" />
+
+        {/* percentile 75 (dashed) */}
+        <line x1={padL} y1={yOf(p75)} x2={w - padR} y2={yOf(p75)} stroke={CHART_COLOR.percentile} strokeOpacity={0.7} strokeDasharray="4 3" strokeWidth={1.25} />
+        <text x={w - padR - 4} y={yOf(p75) - 4} textAnchor="end" fontSize={9} fill={CHART_COLOR.percentile}>
+          75%
+        </text>
+
+        {/* average (solid) */}
+        <line x1={padL} y1={yOf(avg)} x2={w - padR} y2={yOf(avg)} stroke={CHART_COLOR.average} strokeOpacity={0.85} strokeWidth={1.5} />
+
+        {/* threshold (solid) */}
+        <line x1={padL} y1={yOf(threshold)} x2={w - padR} y2={yOf(threshold)} stroke={CHART_COLOR.threshold} strokeOpacity={0.85} strokeWidth={1.5} />
+
+        {/* rolling average */}
+        <polyline points={rollingPath} fill="none" stroke={CHART_COLOR.rolling} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+
+        <line x1={padL} y1={padT + plotH} x2={w - padR} y2={padT + plotH} stroke="currentColor" strokeOpacity={0.25} strokeWidth={1} className="text-zinc-400" />
+        <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="currentColor" strokeOpacity={0.25} strokeWidth={1} className="text-zinc-400" />
+
+        {pts.map((p) => (
+          <circle key={p.key} cx={p.x} cy={p.y} r={4} fill={CHART_COLOR.issue} opacity={0.8}>
+            <title>{`${formatShortDate(p.resolvedIso, locale)} — ${p.leadDays}d`}</title>
+          </circle>
+        ))}
+      </svg>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-zinc-500">
+        <span className="flex items-center gap-1.5"><LegendDot color={CHART_COLOR.issue} />{t('boardDashboard.legendIssue')}</span>
+        <span className="flex items-center gap-1.5"><LegendLine color={CHART_COLOR.average} />{t('boardDashboard.legendAverage')}</span>
+        <span className="flex items-center gap-1.5"><LegendLine color={CHART_COLOR.threshold} />{t('boardDashboard.legendThreshold')}</span>
+        <span className="flex items-center gap-1.5"><LegendLine color={CHART_COLOR.percentile} dashed />{t('boardDashboard.legendPercentile')}</span>
+        <span className="flex items-center gap-1.5"><LegendLine color={CHART_COLOR.rolling} />{t('boardDashboard.legendRollingAvg')}</span>
+        <span className="flex items-center gap-1.5"><LegendDot color={CHART_COLOR.band} />{t('boardDashboard.legendStdDev')}</span>
+      </div>
+    </div>
   );
 }
 
@@ -336,6 +653,7 @@ export default function BoardDashboard({ board, projectKey, onBack }: BoardDashb
               <ThroughputBars
                 rows={data.throughputByWeek}
                 emptyLabel={isSprintView ? t('boardDashboard.emptyThroughputSprint') : t('boardDashboard.emptyThroughput')}
+                t={t}
               />
             </motion.div>
 
@@ -364,7 +682,7 @@ export default function BoardDashboard({ board, projectKey, onBack }: BoardDashb
               <p className="text-[11px] text-zinc-600">
                 {isSprintView ? t('boardDashboard.scatterHintSprint') : t('boardDashboard.scatterHint')}
               </p>
-              <LeadScatter points={data.scatter} title={t('boardDashboard.emptyScatter')} />
+              <LeadTimeControlChart points={data.scatter} title={t('boardDashboard.emptyScatter')} locale={locale} t={t} />
             </motion.div>
 
             <motion.div

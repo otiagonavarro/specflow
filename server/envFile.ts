@@ -17,6 +17,8 @@ export const GITHUB_ENV_KEYS = [
   'LOCAL_REPOS_ROOT',
 ] as const;
 
+export const LLM_ENV_KEYS = ['LLM_PROVIDER', 'LLM_API_KEY', 'LLM_MODEL'] as const;
+
 export function getEnvFilePath(): string {
   return path.join(process.cwd(), '.env');
 }

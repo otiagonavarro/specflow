@@ -1,0 +1,25 @@
+---
+description: Usar sempre que for pedido para commitar, dar push e abrir um Pull Request neste repo (git-commit, "faz o PR", "abre a pull request").
+alwaysApply: false
+---
+
+# PR deve usar o template do repositório
+
+O repo define um template fixo de PR em `.github/pull_request_template.md`.
+Ao abrir um PR (ex.: `gh pr create`), leia esse arquivo e preencha o `--body`
+seguindo exatamente as mesmas seções — não gerar um corpo livre tipo
+"## Summary" / "## Test plan".
+
+Seções obrigatórias, na ordem do template:
+
+- `# Descrição`
+- `## Contexto`
+- `## Serviço afetado` (`agent-platform` | `ai-agents` | `monorepo (raiz)`)
+- `## Mudanças Realizadas`
+- `## Impacto`
+- `## Como Testar`
+- `## Tarefas Relacionadas` (link Jira `AN-XXXX`; sem ticket, usar `N/A`, nunca deixar o placeholder)
+- `## Observações`
+
+A mensagem de commit segue a convenção normal do repo (conventional commits);
+o template rege só o corpo do PR.

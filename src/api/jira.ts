@@ -523,7 +523,12 @@ export interface BoardMetricsPayload {
   completedInWindow: number;
   avgLeadTimeDays: number | null;
   medianLeadTimeDays: number | null;
-  throughputByWeek: Array<{ weekLabel: string; weekStartIso: string; count: number }>;
+  throughputByWeek: Array<{
+    weekLabel: string;
+    weekStartIso: string;
+    count: number;
+    byType: Record<string, number>;
+  }>;
   leadTimeHistogram: Array<{ bucket: string; count: number }>;
   byIssueType: Array<{ type: string; count: number }>;
   scatter: Array<{ key: string; resolvedIso: string; leadDays: number }>;

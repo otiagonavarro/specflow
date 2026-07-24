@@ -1,5 +1,18 @@
 <!-- markdownlint-disable -->
-# kanbam-code
+<div align="center">
+  <img src="./assets/logo.svg" alt="navarro" width="200" />
+    <h1>kanbam-code</h1>
+
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18.18.0-339933?logo=node.js&logoColor=white)](package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](package.json)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](package.json)
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](package.json)
+[![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)](package.json)
+[![npm](https://img.shields.io/badge/npm-not%20published-red?logo=npm&logoColor=white)](#getting-started)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#prerequisites)
+[![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen)](.github/pull_request_template.md)
+
+</div>
 
 **Jira-integrated kanban UI + local Express API.** The browser never holds Jira tokens; the server reads them from `.env` or from in-app Settings.
 
@@ -160,6 +173,7 @@ If **58470** is busy, `npm run init` picks the next free port and prints it (it 
 |---------|-------------|
 | `kanbam-code create [dir] [git-url]` | Clone + `npm install` into `./dir` (default dir: `kanbam-code`) |
 | `kanbam-code init` | Same as `npm run init` when run inside a clone |
+| `kanbam-code update [dir]` | Update an existing install — `git pull` + `npm install` for a clone, or `npm install -g <repo>` for a global install |
 | `kanbam-code --help` | Show usage |
 
 ---

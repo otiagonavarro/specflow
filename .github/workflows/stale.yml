@@ -1,0 +1,44 @@
+name: 'Stale PR Only'
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Permite execução manual
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Mark PRs as stale'
+        uses: actions/stale@v9
+        with:
+          # Mensagens em português
+          stale-pr-message: 'Este PR está inativo há 30 dias. Atualize ou ele será fechado em 7 dias.'
+          close-pr-message: 'Fechando o PR por inatividade.'
+
+          # Configurações de tempo para PRs
+          days-before-pr-stale: 30
+          days-before-pr-close: 7
+
+          # Desabilitar processamento de issues
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+
+          # Configurações de labels
+          stale-pr-label: 'stale'
+          remove-stale-when-updated: true
+
+          # Filtros
+          only-labels: ''
+
+          # Configurações de performance
+          operations-per-run: 30
+          debug-only: false
+
+          # Configurações de segurança
+          exempt-draft-pr: false
+          delete-branch: false

@@ -1,6 +1,8 @@
-import type { IntegrationConfig, IntegrationSavePayload } from './types';
+import type { IntegrationConfig, IntegrationSavePayload, LlmProvider } from './types';
 
-let clientCache: IntegrationConfig = { jira: null, github: null };
+const DEFAULT_LLM: IntegrationConfig['llm'] = { provider: 'nvidia', model: '', apiKeyConfigured: false };
+
+let clientCache: IntegrationConfig = { jira: null, github: null, llm: DEFAULT_LLM };
 
 function normalizeJira(j: unknown): IntegrationConfig['jira'] {
   if (!j || typeof j !== 'object') return null;
@@ -30,10 +32,21 @@ function normalizeGithub(gh: unknown): IntegrationConfig['github'] {
   return { localReposPath };
 }
 
-function normalizeConfig(parsed: { jira?: unknown; github?: unknown }): IntegrationConfig {
+function normalizeLlm(l: unknown): IntegrationConfig['llm'] {
+  if (!l || typeof l !== 'object') return DEFAULT_LLM;
+  const o = l as Record<string, unknown>;
+  const provider: LlmProvider =
+    o.provider === 'openai' || o.provider === 'anthropic' ? o.provider : 'nvidia';
+  const model = typeof o.model === 'string' ? o.model : '';
+  const apiKeyConfigured = o.apiKeyConfigured === true;
+  return { provider, model, apiKeyConfigured };
+}
+
+function normalizeConfig(parsed: { jira?: unknown; github?: unknown; llm?: unknown }): IntegrationConfig {
   return {
     jira: normalizeJira(parsed.jira),
     github: normalizeGithub(parsed.github),
+    llm: normalizeLlm(parsed.llm),
   };
 }
 
@@ -42,7 +55,7 @@ export function getConfig(): IntegrationConfig {
 }
 
 export function clearConfig(): void {
-  clientCache = { jira: null, github: null };
+  clientCache = { jira: null, github: null, llm: DEFAULT_LLM };
 }
 
 export function isJiraConfigured(): boolean {
@@ -68,15 +81,15 @@ export async function loadConfigFromServer(): Promise<IntegrationConfig> {
     const res = await fetch('/api/config');
     if (!res.ok) {
       clearConfig();
-      return { jira: null, github: null };
+      return clientCache;
     }
     const data = await res.json();
-    const normalized = normalizeConfig(data as { jira?: unknown; github?: unknown });
+    const normalized = normalizeConfig(data as { jira?: unknown; github?: unknown; llm?: unknown });
     clientCache = normalized;
     return normalized;
   } catch {
     clearConfig();
-    return { jira: null, github: null };
+    return clientCache;
   }
 }
 
