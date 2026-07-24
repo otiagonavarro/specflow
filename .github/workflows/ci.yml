@@ -78,7 +78,7 @@ jobs:
           else
             BASE="HEAD~1"
           fi
-          git diff --name-status -M "$BASE"...HEAD -- '*.md' 'docs/**/*.md' '.github/**/*.md' \
+          git diff --name-status -M "$BASE"...HEAD -- ':(glob)*.md' ':(glob)docs/**/*.md' ':(glob).github/**/*.md' \
             | grep -v '^R100' | awk -F'\t' '{print $NF}' > all_changed_md_files.txt || true
           : > changed_md_files.txt
           while IFS= read -r file; do
