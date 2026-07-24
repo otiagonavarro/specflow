@@ -173,6 +173,7 @@ If **58470** is busy, `npm run init` picks the next free port and prints it (it 
 |---------|-------------|
 | `kanbam-code create [dir] [git-url]` | Clone + `npm install` into `./dir` (default dir: `kanbam-code`) |
 | `kanbam-code init` | Same as `npm run init` when run inside a clone |
+| `kanbam-code update [dir]` | Update an existing install — `git pull` + `npm install` for a clone, or `npm install -g <repo>` for a global install |
 | `kanbam-code --help` | Show usage |
 
 ---
