@@ -1,15 +1,15 @@
 {
-  "name": "kanbam-code",
+  "name": "specflow",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "description": "Jira-integrated kanban UI with local Express API proxy",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tiagornandrade/kanbam-code.git"
+    "url": "git+https://github.com/tiagornandrade/specflow.git"
   },
   "bin": {
-    "kanbam-code": "./bin/kanbam-code.mjs"
+    "specflow": "./bin/specflow.mjs"
   },
   "engines": {
     "node": ">=18.18.0"

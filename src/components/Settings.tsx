@@ -585,10 +585,10 @@ export default function Settings({ initialSection }: { initialSection?: string }
         return (
           <div className="space-y-0">
             <SettingRow label="Workspace Name" description="Displayed across the navigation and exports.">
-              <input defaultValue="kanbam-code" className="bg-surface-highest text-white text-xs font-bold px-3 py-2 rounded-lg border border-outline-variant/10 focus:border-primary/30 outline-none w-44 transition-colors" />
+              <input defaultValue="specflow" className="bg-surface-highest text-white text-xs font-bold px-3 py-2 rounded-lg border border-outline-variant/10 focus:border-primary/30 outline-none w-44 transition-colors" />
             </SettingRow>
             <SettingRow label="Workspace Slug" description="Used in URLs and API references.">
-              <input defaultValue="kanbam-code" className="bg-surface-highest text-zinc-400 text-xs font-mono px-3 py-2 rounded-lg border border-outline-variant/10 focus:border-primary/30 outline-none w-44 transition-colors" />
+              <input defaultValue="specflow" className="bg-surface-highest text-zinc-400 text-xs font-mono px-3 py-2 rounded-lg border border-outline-variant/10 focus:border-primary/30 outline-none w-44 transition-colors" />
             </SettingRow>
             <SettingRow label="Default Sprint Duration" description="Applied when creating new sprints.">
               <select defaultValue="2" className="bg-surface-highest text-white text-xs font-bold px-3 py-2 rounded-lg border border-outline-variant/10 focus:border-primary/30 outline-none w-32 cursor-pointer transition-colors">

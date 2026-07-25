@@ -19,7 +19,7 @@ const examplePath = path.join(root, '.env.example');
 
 if (!fs.existsSync(envPath) && fs.existsSync(examplePath)) {
   fs.copyFileSync(examplePath, envPath);
-  console.log('[kanbam] Created .env from .env.example — add Jira settings there or in the app UI.');
+  console.log('[specflow] Created .env from .env.example — add Jira settings there or in the app UI.');
 }
 
 dotenv.config({ path: envPath });
@@ -108,7 +108,7 @@ async function waitForHealth(timeoutMs = 60_000) {
 try {
   await waitForHealth();
 } catch (err) {
-  console.error('[kanbam]', err instanceof Error ? err.message : err);
+  console.error('[specflow]', err instanceof Error ? err.message : err);
   try {
     server.kill('SIGTERM');
   } catch {
@@ -121,11 +121,11 @@ const preferredUi =
   Number(process.env.VITE_PORT || process.env.UI_PORT || '') || DEFAULT_UI_DEV_PORT;
 const uiPort = await findFreeUiPort(preferredUi, apiPortNum);
 if (uiPort !== preferredUi) {
-  console.log(`[kanbam] Port ${preferredUi} is in use — starting UI on ${uiPort} instead`);
+  console.log(`[specflow] Port ${preferredUi} is in use — starting UI on ${uiPort} instead`);
 }
 
-console.log('[kanbam] API ready — starting UI (Vite)…');
-console.log(`[kanbam] Open http://localhost:${uiPort} (API proxy → port ${serverPort})`);
+console.log('[specflow] API ready — starting UI (Vite)…');
+console.log(`[specflow] Open http://localhost:${uiPort} (API proxy → port ${serverPort})`);
 
 ui = runVite(uiPort);
 
@@ -146,7 +146,7 @@ server.on('exit', (code, signal) => {
   }
   const cleanCode = code === 0 || code === null || code === 143 || code === 130;
   if (!cleanCode) {
-    console.error('[kanbam] Server exited with code', code);
+    console.error('[specflow] Server exited with code', code);
     if (ui && !ui.killed) ui.kill('SIGTERM');
     process.exit(code ?? 1);
   }

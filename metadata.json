@@ -1,5 +1,5 @@
 {
-  "name": "kanbam-code",
+  "name": "specflow",
   "description": "Local Jira kanban UI with Express API proxy for integrations.",
   "requestFramePermissions": []
 }

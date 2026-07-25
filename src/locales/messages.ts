@@ -1,6 +1,6 @@
 export type Locale = 'en' | 'pt';
 
-export const LOCALE_STORAGE_KEY = 'kanbam-code-locale';
+export const LOCALE_STORAGE_KEY = 'specflow-locale';
 
 export const messages: Record<
   Locale,
@@ -9,7 +9,7 @@ export const messages: Record<
   en: {
     app: {
       loading: 'Loading integrations…',
-      brandTitle: 'kanbam-code',
+      brandTitle: 'specflow',
       brandTagline: 'Local Jira workspace',
     },
     nav: {
@@ -295,7 +295,7 @@ export const messages: Record<
       repoRequired: 'Select a repository to generate and save the spec under .specflow/.',
       repoHint:
         'Required. The spec is saved to .specflow/<spec-title>/spec.md and repo context is used for generation.',
-      specSaved: 'Saved to {path} (inside the selected repository, not kanbam-code).',
+      specSaved: 'Saved to {path} (inside the selected repository, not specflow).',
       saveFailed: 'The spec was generated but could not be written to .specflow/.',
       openIdeHeading: 'Open in IDE',
       openCursor: 'Open in Cursor (new window)',
@@ -347,7 +347,7 @@ export const messages: Record<
   pt: {
     app: {
       loading: 'Carregando integrações…',
-      brandTitle: 'kanbam-code',
+      brandTitle: 'specflow',
       brandTagline: 'Jira no ambiente local',
     },
     nav: {
@@ -638,7 +638,7 @@ export const messages: Record<
       repoRequired: 'Selecione um repositório para gerar e salvar a spec em .specflow/.',
       repoHint:
         'Obrigatório. A spec é salva em .specflow/<titulo-da-spec>/spec.md e o repositório enriquece a geração.',
-      specSaved: 'Salvo em {path} (no repositório selecionado, não no kanbam-code).',
+      specSaved: 'Salvo em {path} (no repositório selecionado, não no specflow).',
       saveFailed: 'A spec foi gerada, mas não foi possível gravar em .specflow/.',
       openIdeHeading: 'Abrir na IDE',
       openCursor: 'Abrir no Cursor (nova janela)',

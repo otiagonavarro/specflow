@@ -36,8 +36,8 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ### Changed
 - `OpenSpecMenu`, `IssueDetailModal`, `EpicDetail` atualizados para o fluxo de geração de spec.
-- `bin/kanbam-code.mjs` marcado como executável; fluxo `npx --package=github:` aprimorado.
-- README atualizado com instruções de npx hospedado no GitHub e variável `KANBAM_CODE_HOME`.
+- `bin/specflow.mjs` marcado como executável; fluxo `npx --package=github:` aprimorado.
+- README atualizado com instruções de npx hospedado no GitHub e variável `SPECFLOW_HOME`.
 - `.env.example` com placeholders de `NVIDIA_API_KEY` e `NVIDIA_SPEC_MODEL`.
 
 ## [2026-04-09] — `28cc41a` (PR #2)
@@ -51,7 +51,7 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 - UI React completa em português do Brasil.
 - Integração com API do Jira via servidor Express local (proxy).
 - Fluxos de Settings e Projects; Issues com paginação; dashboards de board com janela histórica configurável.
-- CLI `kanbam-code` (`create`/`init`), scripts de init com portas altas por padrão, `--strictPort` no Vite.
+- CLI `specflow` (`create`/`init`), scripts de init com portas altas por padrão, `--strictPort` no Vite.
 - `package-lock.json`, tsconfig do servidor, locales, hooks e mapa de planejamento.
 - README com orientação de uso via npx a partir do GitHub e `npm run list`.
 
