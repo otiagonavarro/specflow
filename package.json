@@ -2,6 +2,7 @@
   "name": "specflow",
   "private": true,
   "version": "0.0.0",
+  "license": "MIT",
   "type": "module",
   "description": "Jira-integrated kanban UI with local Express API proxy",
   "repository": {

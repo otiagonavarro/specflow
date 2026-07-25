@@ -10,6 +10,7 @@
 [![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)](package.json)
 [![npm](https://img.shields.io/badge/npm-not%20published-red?logo=npm&logoColor=white)](#getting-started)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#prerequisites)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen)](.github/pull_request_template.md)
 
 </div>
@@ -233,6 +234,12 @@ See **`.env.example`**. Secrets stay in environment variables or `.env` — neve
 **Old `.env` still has `SERVER_PORT=3001`**
 
 - The app keeps using that value until you align with **58471** / **58470** or refresh `.env` from `.env.example`.
+
+---
+
+## License
+
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
 ---
 
