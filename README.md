@@ -100,6 +100,8 @@ kanbam-code --help
 
 > Once published to npm, this becomes simply `npm install -g kanbam-code`.
 
+To update a global install later, run **`kanbam-code update`**. It keeps a persistent clone at `~/.kanbam-code/src` (pulling/cloning + `npm install` there), then relinks the global bin to it — this avoids `npm install -g github:…`, which symlinks into npm's own cache tmp folder and can fail once npm garbage-collects it mid-install.
+
 ### Start from any folder (npx)
 
 The package is **not** on the public npm registry. Use GitHub as the package source:
@@ -173,7 +175,7 @@ If **58470** is busy, `npm run init` picks the next free port and prints it (it 
 |---------|-------------|
 | `kanbam-code create [dir] [git-url]` | Clone + `npm install` into `./dir` (default dir: `kanbam-code`) |
 | `kanbam-code init` | Same as `npm run init` when run inside a clone |
-| `kanbam-code update [dir]` | Update an existing install — `git pull` + `npm install` for a clone, or `npm install -g <repo>` for a global install |
+| `kanbam-code update [dir]` | Update an existing install — `git pull` + `npm install` for a clone; for a global install, pulls/clones into `~/.kanbam-code/src`, runs `npm install`, then relinks the global bin to it |
 | `kanbam-code --help` | Show usage |
 
 ---
