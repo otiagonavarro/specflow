@@ -5,6 +5,7 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,7 +76,8 @@ Commands:
   kanbam-code create [dir] [git-url]
                             Clone into ./dir (default: kanbam-code), then npm install
   kanbam-code update [dir] Update an existing install (git clone: git pull + npm install;
-                            global "npm install -g": reinstalls the latest from GitHub)
+                            global install: pulls/clones into ~/.kanbam-code/src, npm
+                            install, then relinks the global bin to it)
 
 From ANY folder (replace OWNER with your GitHub user or org):
 
@@ -209,12 +211,53 @@ if (cmd === 'init' || cmd === 'start') {
     );
   } else {
     // Assumed global install (npm install -g github:OWNER/kanbam-code).
+    //
+    // `npm install -g <git-url>` is NOT reused here: npm symlinks that kind of
+    // global install into its own cache's ephemeral tmp/git-clone-* dir, which
+    // npm garbage-collects almost immediately — sometimes before the install
+    // even finishes reifying nested deps. That produces flaky-looking
+    // "ENOENT"/"spawn sh ENOENT" failures with files vanishing mid-install.
+    // Instead, keep our own persistent clone and point the global install at
+    // that directory (a local-path global install just symlinks straight to
+    // it, with no npm-cache tmp dir involved).
     const cloneUrl = getCloneUrl(arg2);
-    console.log(`[kanbam-code] npm install -g ${cloneUrl} …`);
+    const srcDir = path.join(os.homedir(), '.kanbam-code', 'src');
+
+    if (fs.existsSync(path.join(srcDir, '.git'))) {
+      console.log(`[kanbam-code] git pull in ${srcDir} …`);
+      try {
+        execFileSync('git', ['pull', '--ff-only'], { cwd: srcDir, stdio: 'inherit' });
+      } catch {
+        console.error(
+          `[kanbam-code] git pull failed in ${srcDir} (local changes or diverged history?). Resolve manually, e.g.:\n` +
+            `  cd ${srcDir} && git status`
+        );
+        process.exit(1);
+      }
+    } else {
+      fs.mkdirSync(path.dirname(srcDir), { recursive: true });
+      console.log(`[kanbam-code] Cloning ${cloneUrl} into ${srcDir} …`);
+      try {
+        execFileSync('git', ['clone', cloneUrl, srcDir], { stdio: 'inherit' });
+      } catch {
+        console.error('[kanbam-code] Clone failed.');
+        process.exit(1);
+      }
+    }
+
+    console.log(`[kanbam-code] npm install in ${srcDir} …`);
     try {
-      execFileSync('npm', ['install', '-g', cloneUrl], { stdio: 'inherit', shell });
+      execFileSync('npm', ['install'], { cwd: srcDir, stdio: 'inherit', shell });
     } catch {
-      console.error('[kanbam-code] Global reinstall failed. Try manually:\n' + `  npm install -g ${cloneUrl}`);
+      console.error('[kanbam-code] npm install failed.');
+      process.exit(1);
+    }
+
+    console.log(`[kanbam-code] npm install -g ${srcDir} …`);
+    try {
+      execFileSync('npm', ['install', '-g', srcDir], { stdio: 'inherit', shell });
+    } catch {
+      console.error('[kanbam-code] Global relink failed. Try manually:\n' + `  npm install -g ${srcDir}`);
       process.exit(1);
     }
     console.log('[kanbam-code] Up to date.');
