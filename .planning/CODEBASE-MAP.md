@@ -1,5 +1,5 @@
 <!-- markdownlint-disable -->
-# Codebase map — kanbam-code
+# Codebase map — specflow
 
 **Generated:** 2026-04-09
 
@@ -29,7 +29,7 @@ This repository is a **React 19 + Vite 6** single-page app with a **separate Exp
 ## Directory map (high signal)
 
 ```shell
-kanbam-code/
+specflow/
 ├── server/
 │   ├── index.ts              # Express app, mounts routers, /api/health
 │   ├── envFile.ts            # Read/write .env map; JIRA_ENV_KEYS, GITHUB_ENV_KEYS

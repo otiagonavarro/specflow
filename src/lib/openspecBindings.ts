@@ -1,4 +1,4 @@
-const STORAGE_PREFIX = 'kanbam.openspec.repo.';
+const STORAGE_PREFIX = 'specflow.openspec.repo.';
 
 export type OpenspecScope = 'epic' | 'issue' | 'subtask';
 

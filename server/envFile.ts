@@ -52,7 +52,7 @@ function quoteValue(v: string): string {
 export function serializeEnvFile(env: Record<string, string>): string {
   const keys = Object.keys(env).sort();
   const header = [
-    '# This file may be updated by kanbam-code (Settings → Integrations).',
+    '# This file may be updated by specflow (Settings → Integrations).',
     '# Do not commit secrets — keep .env in .gitignore.',
     '',
   ];

@@ -47,7 +47,7 @@ jobs:
       - name: Package dist as zip
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          zip -r "kanbam-code-${VERSION:-dev}.zip" dist
+          zip -r "specflow-${VERSION:-dev}.zip" dist
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
