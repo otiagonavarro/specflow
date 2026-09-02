@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { resolveLocalRepoPath } from '../localRepo.js';
 import { generateSpecFromDescription } from '../nimSpecGenerator.js';
 import { buildRepoContext } from '../repoContext.js';
-import { writeSpecToSpecflow } from '../specflowWriter.js';
+import { writeSpecToSpecflow, writeStructuredSpecToSpecflow } from '../specflowWriter.js';
 
 const router = Router();
 
@@ -69,6 +69,34 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 
   const fallbackTitle = `${jiraKey}: ${title}`;
+
+  if (result.kind === 'structured') {
+    const saved = writeStructuredSpecToSpecflow(resolved.repoPath, result.structured, fallbackTitle);
+
+    if (saved.ok === false) {
+      console.error('[specflow] structured write failed:', saved.message, 'repo:', resolved.repoPath);
+      return res.status(500).json({
+        error: saved.error,
+        message: saved.message,
+        markdown: renderStructuredPreview(result.structured),
+      });
+    }
+
+    console.info('[specflow] saved (openspec-shaped):', saved.absolutePath, 'files:', saved.files.length);
+
+    return res.json({
+      markdown: renderStructuredPreview(result.structured),
+      model: result.model,
+      specTitle: saved.specTitle,
+      folderName: saved.folderName,
+      savedPath: saved.relativePath,
+      savedAbsolutePath: saved.absolutePath,
+      changeId: result.structured.changeId,
+      files: saved.files,
+    });
+  }
+
+  // Legacy fallback: the model didn't return parseable structured JSON — save its raw markdown as-is.
   const saved = writeSpecToSpecflow(resolved.repoPath, result.markdown, fallbackTitle);
 
   if (saved.ok === false) {
@@ -80,7 +108,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     });
   }
 
-  console.info('[specflow] saved:', saved.absolutePath);
+  console.info('[specflow] saved (legacy):', saved.absolutePath);
 
   return res.json({
     markdown: result.markdown,
@@ -91,5 +119,21 @@ router.post('/generate', async (req: Request, res: Response) => {
     savedAbsolutePath: saved.absolutePath,
   });
 });
+
+function renderStructuredPreview(structured: {
+  proposal: string;
+  tasks: string;
+  design: string | null;
+  specs: Array<{ capability: string; delta: string }>;
+}): string {
+  const parts = [structured.proposal.trim(), '---', '## tasks.md', structured.tasks.trim()];
+  if (structured.design) {
+    parts.push('---', '## design.md', structured.design.trim());
+  }
+  for (const spec of structured.specs) {
+    parts.push('---', `## specs/${spec.capability}/spec.md`, spec.delta.trim());
+  }
+  return parts.join('\n\n');
+}
 
 export default router;

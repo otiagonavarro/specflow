@@ -296,6 +296,7 @@ export const messages: Record<
       repoHint:
         'Required. The spec is saved to .specflow/<spec-title>/spec.md and repo context is used for generation.',
       specSaved: 'Saved to {path} (inside the selected repository, not specflow).',
+      filesGenerated: 'Files:',
       saveFailed: 'The spec was generated but could not be written to .specflow/.',
       openIdeHeading: 'Open in IDE',
       openCursor: 'Open in Cursor (new window)',
@@ -639,6 +640,7 @@ export const messages: Record<
       repoHint:
         'Obrigatório. A spec é salva em .specflow/<titulo-da-spec>/spec.md e o repositório enriquece a geração.',
       specSaved: 'Salvo em {path} (no repositório selecionado, não no specflow).',
+      filesGenerated: 'Arquivos:',
       saveFailed: 'A spec foi gerada, mas não foi possível gravar em .specflow/.',
       openIdeHeading: 'Abrir na IDE',
       openCursor: 'Abrir no Cursor (nova janela)',
