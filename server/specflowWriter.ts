@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { StructuredSpec } from './nimSpecGenerator.js';
 
 export const SPECFLOW_DIR = '.specflow';
 export const SPECFLOW_SPEC_FILE = 'spec.md';
@@ -79,6 +80,85 @@ export function writeSpecToSpecflow(repoPath: string, markdown: string, fallback
       folderName: path.basename(specDir),
       absolutePath: specFile,
       relativePath,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: 'write_failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/** Title from the proposal's first H1 (stripping a leading "Change:" label), or the fallback. */
+function extractChangeTitle(proposal: string, fallbackTitle: string): string {
+  const title = extractSpecTitle(proposal, fallbackTitle);
+  return title.replace(/^Change:\s*/i, '').trim() || fallbackTitle.trim();
+}
+
+export type WriteStructuredSpecResult =
+  | {
+      ok: true;
+      specTitle: string;
+      folderName: string;
+      absolutePath: string;
+      relativePath: string;
+      files: string[];
+    }
+  | { ok: false; error: 'write_failed'; message: string };
+
+/**
+ * Writes an OpenSpec-shaped change (proposal.md, tasks.md, optional design.md,
+ * specs/<capability>/spec.md) under .specflow/<folder>/ — same document
+ * structure as openspec/changes/<id>/, without touching the openspec/ dir.
+ */
+export function writeStructuredSpecToSpecflow(
+  repoPath: string,
+  structured: StructuredSpec,
+  fallbackTitle: string
+): WriteStructuredSpecResult {
+  const specTitle = extractChangeTitle(structured.proposal, fallbackTitle);
+  const folderBase = structured.changeId || specTitleToFolderName(specTitle);
+  const specflowRoot = path.join(repoPath, SPECFLOW_DIR);
+
+  try {
+    fs.mkdirSync(specflowRoot, { recursive: true });
+    const specDir = uniqueSpecDir(specflowRoot, folderBase);
+    fs.mkdirSync(specDir, { recursive: true });
+
+    const files: string[] = [];
+    const write = (relFromDir: string, content: string) => {
+      const abs = path.join(specDir, relFromDir);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, content.endsWith('\n') ? content : `${content}\n`, { encoding: 'utf8', mode: 0o644 });
+      files.push(path.posix.join(SPECFLOW_DIR, path.basename(specDir), relFromDir));
+    };
+
+    write('proposal.md', structured.proposal);
+    write('tasks.md', structured.tasks);
+    if (structured.design) {
+      write('design.md', structured.design);
+    }
+    for (const spec of structured.specs) {
+      write(path.posix.join('specs', spec.capability, 'spec.md'), spec.delta);
+    }
+
+    const proposalFile = path.join(specDir, 'proposal.md');
+    if (!fs.existsSync(proposalFile)) {
+      return {
+        ok: false,
+        error: 'write_failed',
+        message: `File was not found after write: ${proposalFile}`,
+      };
+    }
+
+    return {
+      ok: true,
+      specTitle,
+      folderName: path.basename(specDir),
+      absolutePath: specDir,
+      relativePath: path.posix.join(SPECFLOW_DIR, path.basename(specDir)),
+      files,
     };
   } catch (err) {
     return {

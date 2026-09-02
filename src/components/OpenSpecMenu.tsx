@@ -42,6 +42,7 @@ export default function OpenSpecMenu({
   const [generating, setGenerating] = useState(false);
   const [markdown, setMarkdown] = useState<string | null>(null);
   const [savedPath, setSavedPath] = useState<string | null>(null);
+  const [savedFiles, setSavedFiles] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ideOpening, setIdeOpening] = useState<string | null>(null);
 
@@ -50,6 +51,7 @@ export default function OpenSpecMenu({
   useEffect(() => {
     setMarkdown(null);
     setSavedPath(null);
+    setSavedFiles([]);
     setError(null);
     setSelectedName(getOpenspecRepoFolder(scope, jiraKey) || '');
   }, [scope, jiraKey, description]);
@@ -109,6 +111,7 @@ export default function OpenSpecMenu({
     setError(null);
     setMarkdown(null);
     setSavedPath(null);
+    setSavedFiles([]);
 
     const result = await generateIssueSpec({
       jiraKey,
@@ -128,6 +131,7 @@ export default function OpenSpecMenu({
     const pathSaved = result.savedAbsolutePath || result.savedPath;
     if (pathSaved) {
       setSavedPath(pathSaved);
+      setSavedFiles(result.files ?? []);
       setError(null);
     } else {
       setError(result.message || t('openspec.saveFailed'));
@@ -274,12 +278,26 @@ export default function OpenSpecMenu({
           {error ? <p className="text-[11px] text-amber-200/95 leading-relaxed px-1">{error}</p> : null}
 
           {savedPath ? (
-            <p
-              className="text-[11px] font-bold text-emerald-200/95 leading-relaxed px-2 py-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10"
+            <div
+              className="space-y-1 px-2 py-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10"
               role="status"
             >
-              {interpolate(t('openspec.specSaved'), { path: savedPath })}
-            </p>
+              <p className="text-[11px] font-bold text-emerald-200/95 leading-relaxed">
+                {interpolate(t('openspec.specSaved'), { path: savedPath })}
+              </p>
+              {savedFiles.length > 0 ? (
+                <ul className="space-y-0.5 pl-0.5">
+                  <li className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-200/70">
+                    {t('openspec.filesGenerated')}
+                  </li>
+                  {savedFiles.map((f) => (
+                    <li key={f} className="text-[10px] font-mono text-emerald-100/80 break-all">
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           ) : null}
 
           {markdown ? (
