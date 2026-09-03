@@ -108,6 +108,22 @@ function stripCodeFence(raw: string): string {
 
 const CHANGE_ID_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const CAPABILITY_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
+const DELTA_ADDED_OR_MODIFIED_RE = /^##\s+(ADDED|MODIFIED)\s+Requirements/m;
+const DELTA_REMOVED_RE = /^##\s+REMOVED\s+Requirements/m;
+const DELTA_SCENARIO_RE = /^####\s+Scenario:/m;
+
+/**
+ * True when a delta has a recognized OpenSpec section header, and — for
+ * ADDED/MODIFIED sections, which introduce requirements — at least one
+ * "#### Scenario:" block. REMOVED-only deltas don't need scenarios.
+ */
+function isValidOpenSpecDelta(delta: string): boolean {
+  const hasAddedOrModified = DELTA_ADDED_OR_MODIFIED_RE.test(delta);
+  const hasRemoved = DELTA_REMOVED_RE.test(delta);
+  if (!hasAddedOrModified && !hasRemoved) return false;
+  if (hasAddedOrModified && !DELTA_SCENARIO_RE.test(delta)) return false;
+  return true;
+}
 
 function slugify(input: string): string {
   return input
@@ -136,6 +152,7 @@ function parseStructuredSpec(raw: string): StructuredSpec | null {
 
   const specsRaw = Array.isArray(obj.specs) ? obj.specs : [];
   const specs: SpecDelta[] = [];
+  const seenCapabilities = new Set<string>();
   for (const entry of specsRaw) {
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
@@ -144,6 +161,9 @@ function parseStructuredSpec(raw: string): StructuredSpec | null {
     if (!capabilityRaw || !delta) continue;
     const capability = slugify(capabilityRaw);
     if (!capability || !CAPABILITY_RE.test(capability)) continue;
+    if (!isValidOpenSpecDelta(delta)) continue;
+    if (seenCapabilities.has(capability)) continue;
+    seenCapabilities.add(capability);
     specs.push({ capability, delta });
   }
   if (specs.length === 0) return null;
