@@ -385,7 +385,7 @@ export async function completeChat(
   system: string,
   userContent: string,
   options: { maxTokens?: number; scope?: LlmConfigScope } = {}
-): Promise<(ChatResult & { ok: true; provider: LlmProvider; model: string }) | { ok: false; error: 'not_configured' | 'upstream_error'; message: string }> {
+): Promise<(Extract<ChatResult, { ok: true }> & { provider: LlmProvider; model: string }) | { ok: false; error: 'not_configured' | 'upstream_error'; message: string }> {
   const { provider, apiKey, model } = resolveLlmConfig(options.scope);
   const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
   if (!apiKey) {

@@ -607,7 +607,7 @@ export async function reviewPullRequest(
     );
     if (chat.stopReason !== 'length' && chat.stopReason !== 'max_tokens') break;
   }
-  if (!chat || chat.ok === false) {
+  if (!chat || !chat.ok) {
     return { ok: false, status: 502, error: 'upstream_error', message: 'The review request did not run.' };
   }
 
