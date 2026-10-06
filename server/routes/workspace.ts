@@ -232,7 +232,7 @@ function respondRunResult(
   });
 }
 
-const IDE_LAUNCHER_IDS = new Set<IdeLauncherId>(['cursor', 'vscode']);
+const IDE_LAUNCHER_IDS = new Set<IdeLauncherId>(['cursor', 'vscode', 'antigravity', 'kiro']);
 
 router.post('/open-ide', async (req: Request, res: Response) => {
   const body = req.body as { ide?: string; repoName?: string; newWindow?: boolean };
