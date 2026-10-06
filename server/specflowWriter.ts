@@ -123,18 +123,20 @@ export function writeArtifactsToSpecflow(
   const folderBase = artifacts.slug || specTitleToFolderName(specTitle);
   const specflowRoot = path.join(repoPath, SPECFLOW_DIR);
 
+  // Write into a hidden staging dir and rename it into place only once every
+  // file is on disk, so a failed write never leaves a partial artifact set.
+  let stagingDir: string | null = null;
   try {
     fs.mkdirSync(specflowRoot, { recursive: true });
-    const specDir = uniqueSpecDir(specflowRoot, folderBase);
-    fs.mkdirSync(specDir, { recursive: true });
+    stagingDir = fs.mkdtempSync(path.join(specflowRoot, `.staging-${folderBase}-`));
 
-    const files: string[] = [];
+    const names: string[] = [];
     const write = (name: string, content: string) => {
-      fs.writeFileSync(path.join(specDir, name), content.endsWith('\n') ? content : `${content}\n`, {
+      fs.writeFileSync(path.join(stagingDir!, name), content.endsWith('\n') ? content : `${content}\n`, {
         encoding: 'utf8',
         mode: 0o644,
       });
-      files.push(path.posix.join(SPECFLOW_DIR, path.basename(specDir), name));
+      names.push(name);
     };
 
     write('intent.md', artifacts.intent);
@@ -145,6 +147,7 @@ export function writeArtifactsToSpecflow(
       JSON.stringify(
         {
           ...provenance,
+          status: 'draft',
           generatedAt: new Date().toISOString(),
           artifacts: ['intent.md', 'spec.md', 'plan.md'],
         },
@@ -153,15 +156,29 @@ export function writeArtifactsToSpecflow(
       )
     );
 
+    // mkdtemp creates the dir as 0700; match the permissions of a regular mkdir.
+    fs.chmodSync(stagingDir, 0o755);
+    const specDir = uniqueSpecDir(specflowRoot, folderBase);
+    fs.renameSync(stagingDir, specDir);
+    stagingDir = null;
+
+    const folderName = path.basename(specDir);
     return {
       ok: true,
       specTitle,
-      folderName: path.basename(specDir),
+      folderName,
       absolutePath: specDir,
-      relativePath: path.posix.join(SPECFLOW_DIR, path.basename(specDir)),
-      files,
+      relativePath: path.posix.join(SPECFLOW_DIR, folderName),
+      files: names.map((name) => path.posix.join(SPECFLOW_DIR, folderName, name)),
     };
   } catch (err) {
+    if (stagingDir) {
+      try {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      } catch {
+        // Best effort: the original error is the one worth reporting.
+      }
+    }
     return {
       ok: false,
       error: 'write_failed',
