@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { resolveLocalRepoPath } from '../localRepo.js';
 import { generateSpecFromDescription, PROMPT_VERSION } from '../nimSpecGenerator.js';
+import { commentOnPr, findOpenPrsForIssue, reviewPullRequest } from '../prReview.js';
 import { buildRepoContext } from '../repoContext.js';
 import { writeArtifactsToSpecflow, writeSpecToSpecflow } from '../specflowWriter.js';
 
@@ -120,6 +121,52 @@ router.post('/generate', async (req: Request, res: Response) => {
     savedPath: saved.relativePath,
     savedAbsolutePath: saved.absolutePath,
   });
+});
+
+/** Open PRs in the selected local repo that mention the Jira key (title or branch). */
+router.get('/prs', async (req: Request, res: Response) => {
+  const jiraKey = String(req.query.jiraKey ?? '').trim();
+  const resolved = resolveLocalRepoPath(String(req.query.repoName ?? ''));
+  if (!jiraKey) return res.status(400).json({ error: 'invalid_input', message: 'jiraKey is required.' });
+  if ('error' in resolved) return res.status(400).json({ error: 'invalid_repo', message: resolved.error });
+
+  const found = await findOpenPrsForIssue(resolved.repoPath, jiraKey);
+  if (found.ok === false) return res.status(502).json({ error: 'gh_failed', message: found.message });
+  return res.json({ prs: found.prs });
+});
+
+router.post('/review', async (req: Request, res: Response) => {
+  const body = req.body as { jiraKey?: string; repoName?: string; prNumber?: number };
+  const jiraKey = String(body.jiraKey ?? '').trim();
+  const prNumber = Number(body.prNumber);
+  const resolved = resolveLocalRepoPath(String(body.repoName ?? ''));
+  if (!jiraKey || !Number.isInteger(prNumber) || prNumber <= 0) {
+    return res.status(400).json({ error: 'invalid_input', message: 'jiraKey and prNumber are required.' });
+  }
+  if ('error' in resolved) return res.status(400).json({ error: 'invalid_repo', message: resolved.error });
+
+  const result = await reviewPullRequest(resolved.repoPath, jiraKey, prNumber);
+  if (result.ok === false) return res.status(result.status).json({ error: result.error, message: result.message });
+  console.info('[review] PR #%d reviewed (%s)%s', prNumber, result.model, result.savedPath ? ` → ${result.savedPath}` : '');
+  return res.json(result);
+});
+
+const MAX_COMMENT_CHARS = 60_000;
+
+router.post('/review/publish', async (req: Request, res: Response) => {
+  const body = req.body as { repoName?: string; prNumber?: number; markdown?: string };
+  const prNumber = Number(body.prNumber);
+  const markdown = String(body.markdown ?? '').trim();
+  const resolved = resolveLocalRepoPath(String(body.repoName ?? ''));
+  if (!Number.isInteger(prNumber) || prNumber <= 0 || !markdown || markdown.length > MAX_COMMENT_CHARS) {
+    return res.status(400).json({ error: 'invalid_input', message: 'prNumber and a review (max 60k chars) are required.' });
+  }
+  if ('error' in resolved) return res.status(400).json({ error: 'invalid_repo', message: resolved.error });
+
+  const posted = await commentOnPr(resolved.repoPath, prNumber, markdown);
+  if (posted.ok === false) return res.status(502).json({ error: 'gh_failed', message: posted.message });
+  console.info('[review] published to PR #%d: %s', prNumber, posted.url);
+  return res.json({ url: posted.url });
 });
 
 function renderArtifactsPreview(artifacts: { intent: string; spec: string; plan: string }): string {
