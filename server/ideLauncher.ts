@@ -2,9 +2,9 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type IdeLauncherId = 'cursor' | 'vscode';
+export type IdeLauncherId = 'cursor' | 'vscode' | 'antigravity' | 'kiro';
 
-const MAC_APPS: Record<'cursor' | 'vscode', { appPath: string; cliRel: string; openName: string }> = {
+const MAC_APPS: Record<IdeLauncherId, { appPath: string; cliRel: string; openName: string }> = {
   cursor: {
     appPath: '/Applications/Cursor.app',
     cliRel: 'Contents/Resources/app/bin/cursor',
@@ -15,14 +15,33 @@ const MAC_APPS: Record<'cursor' | 'vscode', { appPath: string; cliRel: string; o
     cliRel: 'Contents/Resources/app/bin/code',
     openName: 'Visual Studio Code',
   },
+  antigravity: {
+    appPath: '/Applications/Antigravity IDE.app',
+    cliRel: 'Contents/Resources/app/bin/antigravity-ide',
+    openName: 'Antigravity IDE',
+  },
+  kiro: {
+    appPath: '/Applications/Kiro.app',
+    // Kiro ships its bundled CLI under the VS Code name.
+    cliRel: 'Contents/Resources/app/bin/code',
+    openName: 'Kiro',
+  },
 };
 
-function resolveCliBinary(ide: 'cursor' | 'vscode'): string | null {
+/** CLI name on PATH (non-macOS installs, or when the app bundle is elsewhere). */
+const CLI_NAMES: Record<IdeLauncherId, string> = {
+  cursor: 'cursor',
+  vscode: 'code',
+  antigravity: 'antigravity-ide',
+  kiro: 'kiro',
+};
+
+function resolveCliBinary(ide: IdeLauncherId): string | null {
   const spec = MAC_APPS[ide];
   const embedded = path.join(spec.appPath, spec.cliRel);
   if (fs.existsSync(embedded)) return embedded;
 
-  return ide === 'cursor' ? 'cursor' : 'code';
+  return CLI_NAMES[ide];
 }
 
 function runDetached(command: string, args: string[]): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -51,7 +70,7 @@ function runDetached(command: string, args: string[]): Promise<{ ok: true } | { 
 
 /** macOS fallback when CLI spawn fails — must pass folder via --args. */
 async function launchMacOpenApp(
-  ide: 'cursor' | 'vscode',
+  ide: IdeLauncherId,
   folderPath: string,
   newWindow: boolean,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -68,7 +87,7 @@ async function launchMacOpenApp(
 }
 
 async function launchWithEditorCli(
-  ide: 'cursor' | 'vscode',
+  ide: IdeLauncherId,
   folderPath: string,
   newWindow: boolean,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -109,10 +128,9 @@ export async function launchIdeFolder(
 
   const newWindow = options?.newWindow !== false;
 
-  if (ide === 'cursor' || ide === 'vscode') {
+  if (ide in MAC_APPS) {
     if (process.platform === 'win32') {
-      const cmd = ide === 'cursor' ? 'cursor' : 'code';
-      return runDetached(cmd, newWindow ? ['-n', abs] : [abs]);
+      return runDetached(CLI_NAMES[ide], newWindow ? ['-n', abs] : [abs]);
     }
     return launchWithEditorCli(ide, abs, newWindow);
   }

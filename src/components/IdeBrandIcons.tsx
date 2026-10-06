@@ -1,3 +1,6 @@
+import antigravityIdeIcon from '../assets/antigravity-ide.png';
+import kiroIcon from '../assets/kiro.png';
+
 interface IconProps {
   className?: string;
 }
@@ -24,4 +27,14 @@ export function VsCodeBrandIcon({ className = 'h-5 w-5' }: IconProps) {
       />
     </svg>
   );
+}
+
+/** Antigravity IDE app icon (exported from the macOS app bundle). */
+export function AntigravityBrandIcon({ className = 'h-5 w-5' }: IconProps) {
+  return <img src={antigravityIdeIcon} alt="" aria-hidden="true" className={`${className} rounded-[4px]`} />;
+}
+
+/** Kiro app icon (exported from the macOS app bundle). */
+export function KiroBrandIcon({ className = 'h-5 w-5' }: IconProps) {
+  return <img src={kiroIcon} alt="" aria-hidden="true" className={`${className} rounded-[4px]`} />;
 }

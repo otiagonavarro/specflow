@@ -18,9 +18,9 @@ import { fetchLocalRepoFolders, type LocalRepoFolder } from '../api/workspace';
 import type { IntegrationConfig, IntegrationSavePayload, LlmProvider } from '../api/types';
 
 const LLM_PROVIDER_OPTIONS: { value: LlmProvider; label: string; defaultModel: string }[] = [
-  { value: 'nvidia', label: 'NVIDIA (padrão)', defaultModel: 'meta/llama-3.1-8b-instruct' },
+  { value: 'nvidia', label: 'NVIDIA (padrão)', defaultModel: 'openai/gpt-oss-20b' },
   { value: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o-mini' },
-  { value: 'anthropic', label: 'Anthropic', defaultModel: 'claude-3-5-sonnet-latest' },
+  { value: 'anthropic', label: 'Anthropic', defaultModel: 'claude-sonnet-5-5' },
 ];
 
 const SECTIONS = [
@@ -441,7 +441,7 @@ function IntegrationsSection() {
           <div>
             <p className="text-sm font-bold text-white">LLM (geração de spec)</p>
             <p className="text-[11px] text-zinc-600 mt-0.5">
-              Provedor usado para gerar specs a partir de issues do Jira. Padrão: NVIDIA (chave embutida no servidor).
+              Provedor usado para gerar specs a partir de issues do Jira. Padrão: NVIDIA (chave em <code className="text-zinc-500">NVIDIA_API_KEY</code> no .env).
             </p>
           </div>
         </div>
@@ -480,7 +480,7 @@ function IntegrationsSection() {
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-600">
-              API Key {llmProvider === 'nvidia' && <span className="normal-case font-normal text-zinc-700">(opcional — usa a chave padrão do servidor se vazio)</span>}
+              API Key {llmProvider === 'nvidia' && <span className="normal-case font-normal text-zinc-700">(opcional — usa NVIDIA_API_KEY do .env se vazio)</span>}
             </label>
             <SecretInput
               value={llmApiKey}

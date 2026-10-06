@@ -1,12 +1,11 @@
-/** Default NVIDIA API Catalog key (build.nvidia.com). Server-side only. */
-export const NVIDIA_API_KEY_DEFAULT =
-  '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';
+/** Free-tier model on NVIDIA API Catalog. Override with NVIDIA_SPEC_MODEL in .env. */
+export const NVIDIA_SPEC_MODEL_DEFAULT = 'openai/gpt-oss-20b';
 
-/** Free-tier model on NVIDIA API Catalog. */
-export const NVIDIA_SPEC_MODEL = 'meta/llama-3.1-8b-instruct';
+export function resolveNvidiaModel(): string {
+  return process.env.NVIDIA_SPEC_MODEL?.trim() || NVIDIA_SPEC_MODEL_DEFAULT;
+}
 
+/** NVIDIA API Catalog key (build.nvidia.com), read from NVIDIA_API_KEY in .env. Server-side only. */
 export function resolveNvidiaApiKey(): string {
-  const fromEnv = process.env.NVIDIA_API_KEY?.trim();
-  if (fromEnv) return fromEnv;
-  return NVIDIA_API_KEY_DEFAULT;
+  return process.env.NVIDIA_API_KEY_DEFAULT?.trim() ?? '';
 }

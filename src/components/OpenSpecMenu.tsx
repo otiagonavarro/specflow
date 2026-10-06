@@ -7,7 +7,7 @@ import { useLocale, interpolate } from '../locales';
 import type { OpenspecScope } from '../lib/openspecBindings';
 import { getOpenspecRepoFolder, setOpenspecRepoFolder } from '../lib/openspecBindings';
 import { IDE_OPTIONS } from '../lib/ideDeepLinks';
-import { CursorBrandIcon, VsCodeBrandIcon } from './IdeBrandIcons';
+import { AntigravityBrandIcon, CursorBrandIcon, KiroBrandIcon, VsCodeBrandIcon } from './IdeBrandIcons';
 import OpenspecCliMarkdown from './OpenspecCliMarkdown';
 
 interface OpenSpecMenuProps {
@@ -21,6 +21,8 @@ interface OpenSpecMenuProps {
 
 function IdeIcon({ id }: { id: (typeof IDE_OPTIONS)[number]['id'] }) {
   if (id === 'cursor') return <CursorBrandIcon />;
+  if (id === 'antigravity') return <AntigravityBrandIcon />;
+  if (id === 'kiro') return <KiroBrandIcon />;
   return <VsCodeBrandIcon />;
 }
 

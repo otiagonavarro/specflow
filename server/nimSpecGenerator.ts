@@ -266,16 +266,21 @@ async function callOpenAiCompatible(
 }
 
 async function callAnthropic(apiKey: string, model: string, userContent: string): Promise<GenerateSpecResult> {
+  const headers: Record<string, string> = {
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  // Required by API keys that are not scoped to a single workspace.
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  if (workspaceId) headers['anthropic-workspace-id'] = workspaceId;
+
   let response: Response;
   try {
     response = await fetch(CHAT_URL.anthropic, {
       method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model,
         system: SYSTEM_PROMPT,
@@ -326,7 +331,10 @@ export async function generateSpecFromDescription(input: {
     return {
       ok: false,
       error: 'not_configured',
-      message: `No API key configured for ${provider}. Set it in Settings → Integrations.`,
+      message:
+        provider === 'nvidia'
+          ? 'No API key configured for nvidia. Set NVIDIA_API_KEY in .env (get one at build.nvidia.com).'
+          : `No API key configured for ${provider}. Set it in Settings → Integrations.`,
     };
   }
 

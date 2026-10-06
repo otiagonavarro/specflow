@@ -1,3 +1,5 @@
+import type { IdeId } from '../lib/ideDeepLinks';
+
 export interface LocalRepoFolder {
   name: string;
   absolutePath: string;
@@ -90,7 +92,7 @@ export type OpenspecRunAction =
 export type OpenspecInstructionArtifact = 'proposal' | 'specs' | 'design' | 'tasks';
 
 export async function openIdeFolderOnServer(body: {
-  ide: 'cursor' | 'vscode';
+  ide: IdeId;
   repoName: string;
   newWindow?: boolean;
 }): Promise<{ ok: boolean; error?: string; message?: string }> {
