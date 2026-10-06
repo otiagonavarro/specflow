@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { resolveLocalRepoPath } from '../localRepo.js';
 import { generateSpecFromDescription, PROMPT_VERSION } from '../nimSpecGenerator.js';
-import { commentOnPr, findOpenPrsForIssue, reviewPullRequest } from '../prReview.js';
+import { findOpenPrsForIssue, publishReview, reviewPullRequest } from '../prReview.js';
 import { buildRepoContext } from '../repoContext.js';
 import { writeArtifactsToSpecflow, writeSpecToSpecflow } from '../specflowWriter.js';
 
@@ -151,21 +151,16 @@ router.post('/review', async (req: Request, res: Response) => {
   return res.json(result);
 });
 
-const MAX_COMMENT_CHARS = 60_000;
-
+/** Publishes a review produced by POST /review, identified only by its server-side id. */
 router.post('/review/publish', async (req: Request, res: Response) => {
-  const body = req.body as { repoName?: string; prNumber?: number; markdown?: string };
-  const prNumber = Number(body.prNumber);
-  const markdown = String(body.markdown ?? '').trim();
-  const resolved = resolveLocalRepoPath(String(body.repoName ?? ''));
-  if (!Number.isInteger(prNumber) || prNumber <= 0 || !markdown || markdown.length > MAX_COMMENT_CHARS) {
-    return res.status(400).json({ error: 'invalid_input', message: 'prNumber and a review (max 60k chars) are required.' });
+  const reviewId = String((req.body as { reviewId?: string }).reviewId ?? '').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(reviewId)) {
+    return res.status(400).json({ error: 'invalid_input', message: 'reviewId is required.' });
   }
-  if ('error' in resolved) return res.status(400).json({ error: 'invalid_repo', message: resolved.error });
 
-  const posted = await commentOnPr(resolved.repoPath, prNumber, markdown);
-  if (posted.ok === false) return res.status(502).json({ error: 'gh_failed', message: posted.message });
-  console.info('[review] published to PR #%d: %s', prNumber, posted.url);
+  const posted = await publishReview(reviewId);
+  if (posted.ok === false) return res.status(posted.status).json({ error: 'publish_failed', message: posted.message });
+  console.info('[review] published to PR #%d: %s', posted.prNumber, posted.url);
   return res.json({ url: posted.url });
 });
 

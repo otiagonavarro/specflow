@@ -60,11 +60,16 @@ export default function OpenSpecMenu({
   const [selectedPr, setSelectedPr] = useState<number | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [review, setReview] = useState<{
+    reviewId: string;
     markdown: string;
     findings: PrReviewFinding[];
     savedPath: string | null;
     prNumber: number;
   } | null>(null);
+  /** Identifies the issue/repo/PR a review belongs to; responses for a stale selection are dropped. */
+  const reviewContext = `${jiraKey}|${selectedName.trim()}|${selectedPr ?? ''}`;
+  const reviewContextRef = useRef(reviewContext);
+  reviewContextRef.current = reviewContext;
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -116,6 +121,7 @@ export default function OpenSpecMenu({
     setPrs([]);
     setPrsError(null);
     setSelectedPr(null);
+    setReviewing(false);
     setReview(null);
     setReviewError(null);
     setConfirmPublish(false);
@@ -146,24 +152,22 @@ export default function OpenSpecMenu({
     setReview(null);
     setConfirmPublish(false);
     setPublishedUrl(null);
+    const requestedFor = reviewContext;
     const result = await reviewIssuePr({ jiraKey, repoName: selectedName.trim(), prNumber: selectedPr });
+    if (reviewContextRef.current !== requestedFor) return; // selection changed while reviewing
     setReviewing(false);
     if (result.ok === false) {
       setReviewError(result.message);
       return;
     }
-    setReview({ ...result.data, prNumber: selectedPr });
+    setReview(result.data);
   };
 
   const runPublish = async () => {
     if (!review) return;
     setPublishing(true);
     setReviewError(null);
-    const result = await publishPrReview({
-      repoName: selectedName.trim(),
-      prNumber: review.prNumber,
-      markdown: review.markdown,
-    });
+    const result = await publishPrReview({ reviewId: review.reviewId });
     setPublishing(false);
     setConfirmPublish(false);
     if (result.ok === false) {
@@ -363,6 +367,7 @@ export default function OpenSpecMenu({
                         value={selectedPr ?? ''}
                         onChange={(e) => {
                           setSelectedPr(Number(e.target.value));
+                          setReviewing(false);
                           setReview(null);
                           setPublishedUrl(null);
                         }}

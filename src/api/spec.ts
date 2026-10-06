@@ -106,12 +106,21 @@ export async function fetchIssuePrs(
 }
 
 export function reviewIssuePr(body: { jiraKey: string; repoName: string; prNumber: number }) {
-  return postJson<{ markdown: string; findings: PrReviewFinding[]; model: string; savedPath: string | null; omitted: string[] }>(
+  return postJson<{
+    reviewId: string;
+    prNumber: number;
+    markdown: string;
+    findings: PrReviewFinding[];
+    model: string;
+    savedPath: string | null;
+    omitted: string[];
+  }>(
     '/api/spec/review',
     body
   );
 }
 
-export function publishPrReview(body: { repoName: string; prNumber: number; markdown: string }) {
+/** Publishes a review the server produced; the server resolves the repo and PR from the id. */
+export function publishPrReview(body: { reviewId: string }) {
   return postJson<{ url: string }>('/api/spec/review/publish', body);
 }

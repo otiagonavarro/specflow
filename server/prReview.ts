@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveLlmConfig } from './llmConfig.js';
@@ -144,8 +145,9 @@ export async function findOpenPrsForIssue(
     'list',
     '--state',
     'open',
+    // gh paginates internally; a high limit keeps an older linked PR from falling off the list.
     '--limit',
-    '100',
+    '1000',
     '--json',
     'number,title,url,headRefName,baseRefName,author',
   ]);
@@ -192,9 +194,23 @@ function budgetDiff(diff: string): { text: string; reviewed: string[]; omitted: 
   return { text, reviewed, omitted };
 }
 
-type ArtifactSet = { dir: string; folderName: string; intent?: string; spec?: string; plan?: string };
+type ArtifactSet = {
+  dir: string;
+  folderName: string;
+  /** false for legacy folders (spec.md only, from the single-file fallback). */
+  hasProvenance: boolean;
+  intent?: string;
+  spec?: string;
+  plan?: string;
+  /** Artifacts cut at ARTIFACT_CHAR_BUDGET: requirements past the cut were not checked. */
+  truncated: string[];
+};
 
-/** Most recent .specflow/<feature>/ whose provenance.json records this Jira key. */
+/**
+ * Most recent .specflow/<feature>/ for this Jira key: matched by provenance.json, or —
+ * for legacy single-file specs without provenance — by the key appearing in spec.md.
+ * Symlinked folders are skipped (Dirent.isDirectory() is false for them).
+ */
 export function findArtifactSet(repoPath: string, jiraKey: string): ArtifactSet | null {
   const root = path.join(repoPath, SPECFLOW_DIR);
   let entries: fs.Dirent[];
@@ -204,34 +220,62 @@ export function findArtifactSet(repoPath: string, jiraKey: string): ArtifactSet 
     return null;
   }
 
-  let best: { dir: string; generatedAt: string } | null = null;
+  const keyRe = new RegExp(`(^|[^A-Za-z0-9])${escapeRegExp(jiraKey)}(?![0-9])`, 'i');
+  let best: { dir: string; sortKey: string; hasProvenance: boolean } | null = null;
+  const consider = (candidate: { dir: string; sortKey: string; hasProvenance: boolean }) => {
+    // A provenance match always beats a legacy guess; otherwise the newest wins.
+    if (
+      !best ||
+      (candidate.hasProvenance && !best.hasProvenance) ||
+      (candidate.hasProvenance === best.hasProvenance && candidate.sortKey > best.sortKey)
+    ) {
+      best = candidate;
+    }
+  };
+
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
     const dir = path.join(root, entry.name);
     try {
       const prov = JSON.parse(fs.readFileSync(path.join(dir, 'provenance.json'), 'utf8'));
-      if (String(prov.jiraKey ?? '').toUpperCase() !== jiraKey.toUpperCase()) continue;
-      const generatedAt = String(prov.generatedAt ?? '');
-      if (!best || generatedAt > best.generatedAt) best = { dir, generatedAt };
+      if (String(prov.jiraKey ?? '').toUpperCase() === jiraKey.toUpperCase()) {
+        consider({ dir, sortKey: String(prov.generatedAt ?? ''), hasProvenance: true });
+      }
+      continue;
     } catch {
-      // Not an artifact set (or unreadable provenance) — skip.
+      // No (readable) provenance: fall through to the legacy check.
+    }
+    try {
+      const specPath = path.join(dir, 'spec.md');
+      if (keyRe.test(fs.readFileSync(specPath, 'utf8'))) {
+        consider({ dir, sortKey: fs.statSync(specPath).mtime.toISOString(), hasProvenance: false });
+      }
+    } catch {
+      // Not an artifact folder.
     }
   }
-  if (!best) return null;
+  const found = best as { dir: string; sortKey: string; hasProvenance: boolean } | null;
+  if (!found) return null;
 
+  const truncated: string[] = [];
   const read = (name: string) => {
     try {
-      return fs.readFileSync(path.join(best!.dir, name), 'utf8').slice(0, ARTIFACT_CHAR_BUDGET);
+      const text = fs.readFileSync(path.join(found.dir, name), 'utf8');
+      if (text.length <= ARTIFACT_CHAR_BUDGET) return text;
+      truncated.push(name);
+      return `${text.slice(0, ARTIFACT_CHAR_BUDGET)}\n\n[TRUNCATED: the rest of ${name} was not provided.]`;
     } catch {
       return undefined;
     }
   };
   return {
-    dir: best.dir,
-    folderName: path.basename(best.dir),
+    dir: found.dir,
+    folderName: path.basename(found.dir),
+    hasProvenance: found.hasProvenance,
     intent: read('intent.md'),
     spec: read('spec.md'),
     plan: read('plan.md'),
+    truncated,
   };
 }
 
@@ -273,52 +317,91 @@ type ParsedReview = {
   nitsOmitted: number;
 };
 
-function parseFindings(raw: string): ParsedReview | null {
-  const parsed = extractJsonObject(raw);
-  if (!parsed || typeof parsed !== 'object') return null;
-  const obj = parsed as Record<string, unknown>;
-  if (!Array.isArray(obj.findings)) return null;
+const SEVERITIES = new Set(['important', 'nit']);
+const PASSES = new Set(['bugs', 'security', 'compliance']);
+const COVERAGE_STATUSES = new Set(['met', 'partial', 'missing']);
 
-  const findings = obj.findings
-    .filter((f): f is Record<string, unknown> => !!f && typeof f === 'object')
-    .map((f) => ({
-      severity: f.severity === 'important' ? 'important' : 'nit',
-      pass: f.pass === 'security' || f.pass === 'compliance' ? f.pass : 'bugs',
+/**
+ * Validates the model's review JSON. Invalid enums or missing sections reject the whole
+ * review instead of being coerced: a silently misclassified finding or an absent coverage
+ * table would look like a complete review.
+ */
+function parseFindings(
+  raw: string,
+  opts: { requireCoverage: boolean }
+): { ok: true; review: ParsedReview } | { ok: false; reason: string } {
+  const parsed = extractJsonObject(raw);
+  if (!parsed || typeof parsed !== 'object') return { ok: false, reason: 'not a JSON object' };
+  const obj = parsed as Record<string, unknown>;
+
+  const list = (key: string) => (Array.isArray(obj[key]) ? (obj[key] as unknown[]) : null);
+  const rawFindings = list('findings');
+  const rawCoverage = list('coverage');
+  const rawFiles = list('files');
+  if (!rawFindings) return { ok: false, reason: '"findings" is missing' };
+  if (!rawFiles || rawFiles.length === 0) return { ok: false, reason: '"files" is missing or empty' };
+  if (opts.requireCoverage && (!rawCoverage || rawCoverage.length === 0)) {
+    return { ok: false, reason: '"coverage" is missing although spec.md/plan.md were provided' };
+  }
+
+  const findings: ReviewFinding[] = [];
+  for (const f of rawFindings as Array<Record<string, unknown>>) {
+    const title = String(f?.title ?? '').trim();
+    if (!SEVERITIES.has(String(f?.severity)) || !PASSES.has(String(f?.pass)) || !title) {
+      return { ok: false, reason: `invalid finding ${JSON.stringify(f).slice(0, 200)}` };
+    }
+    findings.push({
+      severity: f.severity as ReviewFinding['severity'],
+      pass: f.pass as ReviewFinding['pass'],
       file: String(f.file ?? ''),
       line: typeof f.line === 'number' && Number.isFinite(f.line) ? f.line : null,
-      title: String(f.title ?? '').trim(),
+      title,
       detail: String(f.detail ?? '').trim(),
-    }))
-    .filter((f) => f.title) as ReviewFinding[];
+    });
+  }
 
-  const records = (key: string) =>
-    Array.isArray(obj[key]) ? (obj[key] as unknown[]).filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : [];
-  const coverage = records('coverage')
-    .map((c) => ({
-      requirement: String(c.requirement ?? '').trim(),
-      status: c.status === 'met' || c.status === 'partial' ? c.status : 'missing',
-      evidence: String(c.evidence ?? '').trim(),
-    }))
-    .filter((c) => c.requirement) as CoverageItem[];
-  const files = records('files')
-    .map((f) => ({ file: String(f.file ?? '').trim(), notes: String(f.notes ?? '').trim() }))
-    .filter((f) => f.file && f.notes);
+  const coverage: CoverageItem[] = [];
+  for (const c of (rawCoverage ?? []) as Array<Record<string, unknown>>) {
+    const requirement = String(c?.requirement ?? '').trim();
+    if (!requirement || !COVERAGE_STATUSES.has(String(c?.status))) {
+      return { ok: false, reason: `invalid coverage item ${JSON.stringify(c).slice(0, 200)}` };
+    }
+    coverage.push({ requirement, status: c.status as CoverageItem['status'], evidence: String(c.evidence ?? '').trim() });
+  }
+
+  const files: FileNote[] = [];
+  for (const f of rawFiles as Array<Record<string, unknown>>) {
+    const file = String(f?.file ?? '').trim();
+    const notes = String(f?.notes ?? '').trim();
+    if (!file || !notes) return { ok: false, reason: `invalid file note ${JSON.stringify(f).slice(0, 200)}` };
+    files.push({ file, notes });
+  }
 
   return {
-    summary: String(obj.summary ?? '').trim(),
-    coverage,
-    files,
-    findings,
-    nitsOmitted: typeof obj.nitsOmitted === 'number' ? Math.max(0, obj.nitsOmitted) : 0,
+    ok: true,
+    review: {
+      summary: String(obj.summary ?? '').trim(),
+      coverage,
+      files,
+      findings,
+      nitsOmitted: typeof obj.nitsOmitted === 'number' ? Math.max(0, Math.floor(obj.nitsOmitted)) : 0,
+    },
   };
 }
 
 export type ReviewLanguage = 'pt-BR' | 'en';
 
-/** Portuguese when the artifacts (or PR title) read as Portuguese; the review follows the spec's language. */
+const PT_WORDS = /\b(n[ãa]o|s[ãa]o|que|para|com|uma|um|est[áa]|deve|quando|ent[ãa]o|requisito|cen[áa]rio|resumo|sistema|arquivo|da|do|das|dos|em)\b/gi;
+const EN_WORDS = /\b(the|and|is|are|that|for|with|when|then|shall|must|requirement|scenario|summary|system|file|of|in|to)\b/gi;
+
+/**
+ * Portuguese vs English by relative stop-word counts (works on short specs, unlike a fixed
+ * threshold); Portuguese-only letters (ã, õ, ç) tip ties. The review follows the spec's language.
+ */
 export function detectReviewLanguage(text: string): ReviewLanguage {
-  const hits = text.match(/\b(n[ãa]o|s[ãa]o|para|com|uma|est[áa]|Requisito|Cen[áa]rio|Resumo|quando|ent[ãa]o)\b/gi);
-  return (hits?.length ?? 0) >= 5 ? 'pt-BR' : 'en';
+  const pt = (text.match(PT_WORDS)?.length ?? 0) + (/[ãõç]/i.test(text) ? 2 : 0);
+  const en = text.match(EN_WORDS)?.length ?? 0;
+  return pt > en ? 'pt-BR' : 'en';
 }
 
 const LABELS: Record<ReviewLanguage, Record<string, string>> = {
@@ -339,6 +422,7 @@ const LABELS: Record<ReviewLanguage, Record<string, string>> = {
     files: 'Files reviewed',
     notReviewed: 'Not reviewed',
     notReviewedHint: 'Generated files or files beyond the size budget:',
+    truncatedArtifacts: 'Only the beginning of these artifacts was provided, so coverage of later requirements/steps is incomplete:',
     bugs: 'Bugs',
     security: 'Security',
     compliance: 'Compliance',
@@ -360,6 +444,7 @@ const LABELS: Record<ReviewLanguage, Record<string, string>> = {
     files: 'Arquivos revisados',
     notReviewed: 'Não revisados',
     notReviewedHint: 'Arquivos gerados ou acima do limite de tamanho:',
+    truncatedArtifacts: 'Só o início destes artefatos foi enviado, então a cobertura dos requisitos/passos seguintes está incompleta:',
     bugs: 'Bugs',
     security: 'Segurança',
     compliance: 'Compliance',
@@ -376,6 +461,7 @@ function renderReviewMarkdown(
     jiraKey: string;
     pr: OpenPr;
     omitted: string[];
+    truncatedArtifacts: string[];
     policySource: string;
     model: string;
     artifactFolder: string | null;
@@ -422,9 +508,16 @@ function renderReviewMarkdown(
     for (const f of input.files) lines.push(`- \`${f.file}\` — ${f.notes.replace(/\n+/g, ' ')}`);
   }
 
-  if (input.omitted.length > 0) {
-    lines.push('', `## ${L.notReviewed}`, L.notReviewedHint);
-    for (const f of input.omitted) lines.push(`- \`${f}\``);
+  if (input.omitted.length > 0 || input.truncatedArtifacts.length > 0) {
+    lines.push('', `## ${L.notReviewed}`);
+    if (input.omitted.length > 0) {
+      lines.push(L.notReviewedHint);
+      for (const f of input.omitted) lines.push(`- \`${f}\``);
+    }
+    if (input.truncatedArtifacts.length > 0) {
+      lines.push(L.truncatedArtifacts);
+      for (const f of input.truncatedArtifacts) lines.push(`- \`${SPECFLOW_DIR}/${input.artifactFolder}/${f}\``);
+    }
   }
   return `${lines.join('\n')}\n`;
 }
@@ -432,6 +525,9 @@ function renderReviewMarkdown(
 export type ReviewPrResult =
   | {
       ok: true;
+      /** Server-side handle for publishing exactly this review to exactly this PR. */
+      reviewId: string;
+      prNumber: number;
       markdown: string;
       findings: ReviewFinding[];
       model: string;
@@ -515,12 +611,13 @@ export async function reviewPullRequest(
     return { ok: false, status: 502, error: 'upstream_error', message: 'The review request did not run.' };
   }
 
-  const parsed = parseFindings(chat.text);
-  if (!parsed) {
+  const result = parseFindings(chat.text, { requireCoverage: !!(artifacts?.spec || artifacts?.plan) });
+  if (result.ok === false) {
     console.error(
-      '[review] unparseable model output (%s, stop=%s, %d chars):\n%s',
+      '[review] invalid model output (%s, stop=%s, %s, %d chars):\n%s',
       chat.model,
       chat.stopReason,
+      result.reason,
       chat.text.length,
       chat.text.slice(0, 2000)
     );
@@ -532,17 +629,19 @@ export async function reviewPullRequest(
       message: truncated
         ? `The model ran out of output tokens before finishing the review (${chat.model}). Try again, or use a larger model in Settings → Integrations.`
         : chat.text.trim()
-          ? `The model did not return valid review JSON (${chat.model}). The raw output is in the server log.`
+          ? `The model returned an incomplete or malformed review (${chat.model}: ${result.reason}). Try again or use a larger model.`
           : `The model returned an empty response (${chat.model}, stop reason: ${chat.stopReason ?? 'unknown'}).`,
     };
   }
 
+  const parsed = result.review;
   const markdown = renderReviewMarkdown({
     jiraKey,
     pr,
     ...parsed,
     language,
     omitted,
+    truncatedArtifacts: artifacts?.truncated ?? [],
     policySource,
     model: chat.model,
     artifactFolder: artifacts?.folderName ?? null,
@@ -551,40 +650,106 @@ export async function reviewPullRequest(
   let savedPath: string | null = null;
   if (artifacts) {
     try {
-      fs.writeFileSync(path.join(artifacts.dir, 'review.md'), markdown, { encoding: 'utf8', mode: 0o644 });
-      const provPath = path.join(artifacts.dir, 'provenance.json');
-      const prov = JSON.parse(fs.readFileSync(provPath, 'utf8'));
-      const reviews = Array.isArray(prov.reviews) ? prov.reviews : [];
-      reviews.push({
-        reviewedAt: new Date().toISOString(),
-        pr: { number: pr.number, url: pr.url, head: pr.headRefName, base: pr.baseRefName },
-        provider: chat.provider,
-        model: chat.model,
-        promptVersion: REVIEW_PROMPT_VERSION,
-        policy: policySource,
-        findings: {
-          important: parsed.findings.filter((f) => f.severity === 'important').length,
-          nits: parsed.findings.filter((f) => f.severity === 'nit').length + parsed.nitsOmitted,
-        },
-        coverage: {
-          met: parsed.coverage.filter((c) => c.status === 'met').length,
-          partial: parsed.coverage.filter((c) => c.status === 'partial').length,
-          missing: parsed.coverage.filter((c) => c.status === 'missing').length,
-        },
-        notReviewed: omitted,
-      });
-      fs.writeFileSync(provPath, `${JSON.stringify({ ...prov, reviews }, null, 2)}\n`, 'utf8');
+      writeFileAtomic(path.join(artifacts.dir, 'review.md'), markdown);
       savedPath = path.posix.join(SPECFLOW_DIR, artifacts.folderName, 'review.md');
+      // Legacy folders have no provenance.json to extend; review.md alone is still useful.
+      if (artifacts.hasProvenance) {
+        const provPath = path.join(artifacts.dir, 'provenance.json');
+        const prov = JSON.parse(fs.readFileSync(provPath, 'utf8'));
+        const reviews = Array.isArray(prov.reviews) ? prov.reviews : [];
+        reviews.push({
+          reviewedAt: new Date().toISOString(),
+          pr: { number: pr.number, url: pr.url, head: pr.headRefName, base: pr.baseRefName },
+          provider: chat.provider,
+          model: chat.model,
+          promptVersion: REVIEW_PROMPT_VERSION,
+          policy: policySource,
+          findings: {
+            important: parsed.findings.filter((f) => f.severity === 'important').length,
+            nits: parsed.findings.filter((f) => f.severity === 'nit').length + parsed.nitsOmitted,
+          },
+          coverage: {
+            met: parsed.coverage.filter((c) => c.status === 'met').length,
+            partial: parsed.coverage.filter((c) => c.status === 'partial').length,
+            missing: parsed.coverage.filter((c) => c.status === 'missing').length,
+          },
+          notReviewed: omitted,
+          truncatedArtifacts: artifacts.truncated,
+        });
+        writeFileAtomic(provPath, `${JSON.stringify({ ...prov, reviews }, null, 2)}\n`);
+      }
     } catch (err) {
-      console.error('[review] could not persist review.md:', err);
+      console.error('[review] could not persist review.md / provenance.json:', err);
     }
   }
 
-  return { ok: true, markdown, findings: parsed.findings, model: chat.model, savedPath, omitted };
+  const reviewId = rememberReview({ repoPath, prNumber: pr.number, prUrl: pr.url, markdown });
+  return {
+    ok: true,
+    reviewId,
+    prNumber: pr.number,
+    markdown,
+    findings: parsed.findings,
+    model: chat.model,
+    savedPath,
+    omitted,
+  };
 }
 
-/** Posts the review as a single PR comment. Called only after explicit user confirmation in the UI. */
-export async function commentOnPr(
+/**
+ * Write to a temp file in the same directory, then rename over the target. A crash never
+ * leaves a half-written provenance.json, and rename replaces a symlinked target instead of
+ * following it, so writes cannot escape the artifact folder.
+ */
+function writeFileAtomic(target: string, content: string): void {
+  const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${randomUUID()}.tmp`);
+  fs.writeFileSync(tmp, content, { encoding: 'utf8', mode: 0o644, flag: 'wx' });
+  try {
+    fs.renameSync(tmp, target);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+type StoredReview = { repoPath: string; prNumber: number; prUrl: string; markdown: string; createdAt: number };
+
+const REVIEW_TTL_MS = 60 * 60 * 1000;
+const MAX_STORED_REVIEWS = 50;
+/**
+ * Reviews this server produced, keyed by an unguessable id. Publishing takes only the id, so
+ * the API can post nothing but a review generated here, to the PR it was generated for.
+ */
+const storedReviews = new Map<string, StoredReview>();
+
+function rememberReview(review: Omit<StoredReview, 'createdAt'>): string {
+  const now = Date.now();
+  for (const [id, r] of storedReviews) {
+    if (now - r.createdAt > REVIEW_TTL_MS) storedReviews.delete(id);
+  }
+  while (storedReviews.size >= MAX_STORED_REVIEWS) {
+    storedReviews.delete(storedReviews.keys().next().value as string);
+  }
+  const id = randomUUID();
+  storedReviews.set(id, { ...review, createdAt: now });
+  return id;
+}
+
+/** Posts a stored review as one comment on the PR it was generated for. */
+export async function publishReview(
+  reviewId: string
+): Promise<{ ok: true; url: string; prNumber: number } | { ok: false; status: number; message: string }> {
+  const review = storedReviews.get(reviewId);
+  if (!review || Date.now() - review.createdAt > REVIEW_TTL_MS) {
+    return { ok: false, status: 404, message: 'Review not found or expired. Run the review again before publishing.' };
+  }
+  const posted = await commentOnPr(review.repoPath, review.prNumber, review.markdown);
+  if (posted.ok === false) return { ok: false, status: 502, message: posted.message };
+  storedReviews.delete(reviewId);
+  return { ok: true, url: posted.url, prNumber: review.prNumber };
+}
+
+async function commentOnPr(
   repoPath: string,
   prNumber: number,
   body: string

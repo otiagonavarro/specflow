@@ -22,6 +22,20 @@ app.use((_req, res, next) => {
   next();
 });
 
+const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
+// State-changing routes write .env, the selected repos and GitHub (via gh). Browsers always
+// send Origin on these requests: only accept the local UI, so other sites (CSRF) and other
+// machines reaching the Vite dev server can't trigger them.
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  const origin = req.get('origin') ?? '';
+  if (!LOCAL_ORIGIN_RE.test(origin)) {
+    return res.status(403).json({ error: 'forbidden_origin', message: 'Only the local SpecFlow UI can call this endpoint.' });
+  }
+  next();
+});
+
 app.use('/api/config', configRouter);
 app.use('/api/jira', jiraRouter);
 app.use('/api/github', githubRouter);
@@ -37,7 +51,8 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+// Loopback only: the Vite dev proxy (127.0.0.1) is the sole intended client.
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`[server] Proxy running on http://localhost:${PORT}`);
   console.log(
     `[server] Jira: ${process.env.JIRA_DOMAIN ? `configured (${process.env.JIRA_DOMAIN})` : 'not configured (use app Settings or .env)'}`
