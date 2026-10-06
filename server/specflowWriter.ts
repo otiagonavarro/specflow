@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { StructuredSpec } from './nimSpecGenerator.js';
+import type { GeneratedArtifacts } from './nimSpecGenerator.js';
 
 export const SPECFLOW_DIR = '.specflow';
 export const SPECFLOW_SPEC_FILE = 'spec.md';
@@ -90,13 +90,14 @@ export function writeSpecToSpecflow(repoPath: string, markdown: string, fallback
   }
 }
 
-/** Title from the proposal's first H1 (stripping a leading "Change:" label), or the fallback. */
-function extractChangeTitle(proposal: string, fallbackTitle: string): string {
-  const title = extractSpecTitle(proposal, fallbackTitle);
-  return title.replace(/^Change:\s*/i, '').trim() || fallbackTitle.trim();
-}
+export type ArtifactProvenance = {
+  jiraKey: string;
+  provider: string;
+  model: string;
+  promptVersion: string;
+};
 
-export type WriteStructuredSpecResult =
+export type WriteArtifactsResult =
   | {
       ok: true;
       specTitle: string;
@@ -108,17 +109,18 @@ export type WriteStructuredSpecResult =
   | { ok: false; error: 'write_failed'; message: string };
 
 /**
- * Writes an OpenSpec-shaped change (proposal.md, tasks.md, optional design.md,
- * specs/<capability>/spec.md) under .specflow/<folder>/ — same document
- * structure as openspec/changes/<id>/, without touching the openspec/ dir.
+ * Writes the AI-native SDLC artifact chain (intent.md → spec.md → plan.md)
+ * under .specflow/<slug>/, plus provenance.json recording the Jira key, model
+ * and prompt version that produced it so the set stays auditable.
  */
-export function writeStructuredSpecToSpecflow(
+export function writeArtifactsToSpecflow(
   repoPath: string,
-  structured: StructuredSpec,
+  artifacts: GeneratedArtifacts,
+  provenance: ArtifactProvenance,
   fallbackTitle: string
-): WriteStructuredSpecResult {
-  const specTitle = extractChangeTitle(structured.proposal, fallbackTitle);
-  const folderBase = structured.changeId || specTitleToFolderName(specTitle);
+): WriteArtifactsResult {
+  const specTitle = extractSpecTitle(artifacts.intent, fallbackTitle).replace(/^[^:]{1,20}:\s*/, '').trim() || fallbackTitle;
+  const folderBase = artifacts.slug || specTitleToFolderName(specTitle);
   const specflowRoot = path.join(repoPath, SPECFLOW_DIR);
 
   try {
@@ -127,30 +129,29 @@ export function writeStructuredSpecToSpecflow(
     fs.mkdirSync(specDir, { recursive: true });
 
     const files: string[] = [];
-    const write = (relFromDir: string, content: string) => {
-      const abs = path.join(specDir, relFromDir);
-      fs.mkdirSync(path.dirname(abs), { recursive: true });
-      fs.writeFileSync(abs, content.endsWith('\n') ? content : `${content}\n`, { encoding: 'utf8', mode: 0o644 });
-      files.push(path.posix.join(SPECFLOW_DIR, path.basename(specDir), relFromDir));
+    const write = (name: string, content: string) => {
+      fs.writeFileSync(path.join(specDir, name), content.endsWith('\n') ? content : `${content}\n`, {
+        encoding: 'utf8',
+        mode: 0o644,
+      });
+      files.push(path.posix.join(SPECFLOW_DIR, path.basename(specDir), name));
     };
 
-    write('proposal.md', structured.proposal);
-    write('tasks.md', structured.tasks);
-    if (structured.design) {
-      write('design.md', structured.design);
-    }
-    for (const spec of structured.specs) {
-      write(path.posix.join('specs', spec.capability, 'spec.md'), spec.delta);
-    }
-
-    const proposalFile = path.join(specDir, 'proposal.md');
-    if (!fs.existsSync(proposalFile)) {
-      return {
-        ok: false,
-        error: 'write_failed',
-        message: `File was not found after write: ${proposalFile}`,
-      };
-    }
+    write('intent.md', artifacts.intent);
+    write('spec.md', artifacts.spec);
+    write('plan.md', artifacts.plan);
+    write(
+      'provenance.json',
+      JSON.stringify(
+        {
+          ...provenance,
+          generatedAt: new Date().toISOString(),
+          artifacts: ['intent.md', 'spec.md', 'plan.md'],
+        },
+        null,
+        2
+      )
+    );
 
     return {
       ok: true,

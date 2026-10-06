@@ -1,8 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { resolveLocalRepoPath } from '../localRepo.js';
-import { generateSpecFromDescription } from '../nimSpecGenerator.js';
+import { generateSpecFromDescription, PROMPT_VERSION } from '../nimSpecGenerator.js';
 import { buildRepoContext } from '../repoContext.js';
-import { writeSpecToSpecflow, writeStructuredSpecToSpecflow } from '../specflowWriter.js';
+import { writeArtifactsToSpecflow, writeSpecToSpecflow } from '../specflowWriter.js';
 
 const router = Router();
 
@@ -71,27 +71,29 @@ router.post('/generate', async (req: Request, res: Response) => {
   const fallbackTitle = `${jiraKey}: ${title}`;
 
   if (result.kind === 'structured') {
-    const saved = writeStructuredSpecToSpecflow(resolved.repoPath, result.structured, fallbackTitle);
+    const { artifacts } = result;
+    const preview = renderArtifactsPreview(artifacts);
+    const saved = writeArtifactsToSpecflow(
+      resolved.repoPath,
+      artifacts,
+      { jiraKey, provider: result.provider, model: result.model, promptVersion: PROMPT_VERSION },
+      fallbackTitle
+    );
 
     if (saved.ok === false) {
-      console.error('[specflow] structured write failed:', saved.message, 'repo:', resolved.repoPath);
-      return res.status(500).json({
-        error: saved.error,
-        message: saved.message,
-        markdown: renderStructuredPreview(result.structured),
-      });
+      console.error('[specflow] artifacts write failed:', saved.message, 'repo:', resolved.repoPath);
+      return res.status(500).json({ error: saved.error, message: saved.message, markdown: preview });
     }
 
-    console.info('[specflow] saved (openspec-shaped):', saved.absolutePath, 'files:', saved.files.length);
+    console.info('[specflow] saved (intent/spec/plan):', saved.absolutePath);
 
     return res.json({
-      markdown: renderStructuredPreview(result.structured),
+      markdown: preview,
       model: result.model,
       specTitle: saved.specTitle,
       folderName: saved.folderName,
       savedPath: saved.relativePath,
       savedAbsolutePath: saved.absolutePath,
-      changeId: result.structured.changeId,
       files: saved.files,
     });
   }
@@ -120,20 +122,17 @@ router.post('/generate', async (req: Request, res: Response) => {
   });
 });
 
-function renderStructuredPreview(structured: {
-  proposal: string;
-  tasks: string;
-  design: string | null;
-  specs: Array<{ capability: string; delta: string }>;
-}): string {
-  const parts = [structured.proposal.trim(), '---', '## tasks.md', structured.tasks.trim()];
-  if (structured.design) {
-    parts.push('---', '## design.md', structured.design.trim());
-  }
-  for (const spec of structured.specs) {
-    parts.push('---', `## specs/${spec.capability}/spec.md`, spec.delta.trim());
-  }
-  return parts.join('\n\n');
+function renderArtifactsPreview(artifacts: { intent: string; spec: string; plan: string }): string {
+  return [
+    '## intent.md',
+    artifacts.intent.trim(),
+    '---',
+    '## spec.md',
+    artifacts.spec.trim(),
+    '---',
+    '## plan.md',
+    artifacts.plan.trim(),
+  ].join('\n\n');
 }
 
 export default router;

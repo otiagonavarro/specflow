@@ -294,7 +294,7 @@ export const messages: Record<
       selectRepo: 'Select…',
       repoRequired: 'Select a repository to generate and save the spec under .specflow/.',
       repoHint:
-        'Required. The spec is saved to .specflow/<spec-title>/spec.md and repo context is used for generation.',
+        'Required. intent.md, spec.md and plan.md (AI-native SDLC playbook) are saved to .specflow/<feature>/ and repo context is used for generation.',
       specSaved: 'Saved to {path} (inside the selected repository, not specflow).',
       filesGenerated: 'Files:',
       saveFailed: 'The spec was generated but could not be written to .specflow/.',
@@ -638,7 +638,7 @@ export const messages: Record<
       selectRepo: 'Selecione…',
       repoRequired: 'Selecione um repositório para gerar e salvar a spec em .specflow/.',
       repoHint:
-        'Obrigatório. A spec é salva em .specflow/<titulo-da-spec>/spec.md e o repositório enriquece a geração.',
+        'Obrigatório. intent.md, spec.md e plan.md (playbook AI-native SDLC) são salvos em .specflow/<feature>/ e o repositório enriquece a geração.',
       specSaved: 'Salvo em {path} (no repositório selecionado, não no specflow).',
       filesGenerated: 'Arquivos:',
       saveFailed: 'A spec foi gerada, mas não foi possível gravar em .specflow/.',

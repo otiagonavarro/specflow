@@ -10,7 +10,6 @@ export async function generateIssueSpec(body: {
   folderName?: string;
   savedPath?: string;
   savedAbsolutePath?: string;
-  changeId?: string;
   files?: string[];
   error?: string;
   message?: string;
@@ -28,8 +27,7 @@ export async function generateIssueSpec(body: {
     folderName?: string;
     savedPath?: string;
     savedAbsolutePath?: string;
-    changeId?: string;
-    files?: string[];
+      files?: string[];
     error?: string;
     message?: string;
   };
@@ -50,7 +48,6 @@ export async function generateIssueSpec(body: {
     savedPath: typeof data.savedPath === 'string' ? data.savedPath : undefined,
     savedAbsolutePath:
       typeof data.savedAbsolutePath === 'string' ? data.savedAbsolutePath : undefined,
-    changeId: typeof data.changeId === 'string' ? data.changeId : undefined,
     files: Array.isArray(data.files) ? data.files.filter((f): f is string => typeof f === 'string') : undefined,
   };
 }
