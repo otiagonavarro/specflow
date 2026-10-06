@@ -1,9 +1,10 @@
-import { resolveLlmConfig, type LlmProvider } from './llmConfig.js';
+import Anthropic from '@anthropic-ai/sdk';
+import { resolveLlmConfig, type LlmConfigScope, type LlmProvider } from './llmConfig.js';
 
-const CHAT_URL: Record<LlmProvider, string> = {
+/** OpenAI-compatible chat endpoints; Anthropic goes through the official SDK (callAnthropic). */
+const CHAT_URL: Record<Exclude<LlmProvider, 'anthropic'>, string> = {
   nvidia: 'https://integrate.api.nvidia.com/v1/chat/completions',
   openai: 'https://api.openai.com/v1/chat/completions',
-  anthropic: 'https://api.anthropic.com/v1/messages',
 };
 
 /**
@@ -128,7 +129,7 @@ export type GenerateSpecResult =
       message?: string;
     };
 
-function stripCodeFence(raw: string): string {
+export function stripCodeFence(raw: string): string {
   const trimmed = raw.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return fenced ? fenced[1].trim() : trimmed;
@@ -209,17 +210,84 @@ function parseModelOutput(raw: string, provider: LlmProvider, model: string): Ge
 }
 
 /** Keeps untrusted text from closing the tag it is wrapped in. */
-function wrapUntrusted(tag: string, content: string): string {
+export function wrapUntrusted(tag: string, content: string): string {
   const escaped = content.replace(new RegExp(`</?${tag}\\b`, 'gi'), (m) => m.replace('<', '&lt;'));
   return `<${tag}>\n${escaped}\n</${tag}>`;
 }
 
+/** stopReason is the provider's finish/stop reason, e.g. "length"/"max_tokens" when the output was cut off. */
+export type ChatResult =
+  | { ok: true; text: string; stopReason: string | null; reasoningChars?: number }
+  | { ok: false; message: string };
+
+const DEFAULT_MAX_TOKENS = 8192;
+
+/** Node's fetch only says "fetch failed"; the useful part (timeout, reset, DNS…) is in err.cause. */
+function describeFetchError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = err.cause as { code?: string; message?: string } | undefined;
+  const detail = cause?.code || cause?.message;
+  return detail ? `${err.message} (${detail})` : err.message;
+}
+
+/**
+ * Reads an OpenAI-style SSE stream. Streaming keeps long generations alive:
+ * a non-streamed request whose response takes >300s (reasoning models at high
+ * effort) is aborted by Node's fetch with a bare "fetch failed".
+ */
+async function readChatStream(response: Response): Promise<ChatResult> {
+  const reader = response.body?.getReader();
+  if (!reader) return { ok: false, message: 'Empty response body.' };
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let text = '';
+  let reasoningChars = 0;
+  let stopReason: string | null = null;
+
+  const handleLine = (line: string) => {
+    const data = line.replace(/^data:\s*/, '').trim();
+    if (!line.startsWith('data:') || !data || data === '[DONE]') return;
+    try {
+      const chunk = JSON.parse(data) as {
+        choices?: Array<{
+          delta?: { content?: string | null; reasoning_content?: string | null; reasoning?: string | null };
+          finish_reason?: string | null;
+        }>;
+      };
+      const choice = chunk.choices?.[0];
+      if (choice?.delta?.content) text += choice.delta.content;
+      reasoningChars += (choice?.delta?.reasoning_content ?? choice?.delta?.reasoning ?? '').length;
+      if (choice?.finish_reason) stopReason = choice.finish_reason;
+    } catch {
+      // Keep-alive comments or partial frames — ignore.
+    }
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      lines.forEach(handleLine);
+    }
+    handleLine(buffer);
+  } catch (err) {
+    return { ok: false, message: `Stream interrupted: ${describeFetchError(err)}` };
+  }
+  return { ok: true, text, stopReason, reasoningChars };
+}
+
 async function callOpenAiCompatible(
-  provider: LlmProvider,
+  provider: Exclude<LlmProvider, 'anthropic'>,
   apiKey: string,
   model: string,
-  userContent: string
-): Promise<GenerateSpecResult> {
+  system: string,
+  userContent: string,
+  maxTokens: number
+): Promise<ChatResult> {
   let response: Response;
   try {
     response = await fetch(CHAT_URL[provider], {
@@ -227,29 +295,25 @@ async function callOpenAiCompatible(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        Accept: 'application/json',
+        Accept: 'text/event-stream',
       },
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: system },
           { role: 'user', content: userContent },
         ],
         temperature: 0.2,
-        max_tokens: 8192,
+        max_tokens: maxTokens,
+        stream: true,
       }),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: 'upstream_error', message };
+    return { ok: false, message: describeFetchError(err) };
   }
 
-  const raw = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    error?: { message?: string };
-  } | null;
-
   if (!response.ok) {
+    const raw = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
     const detail =
       raw && typeof raw === 'object' && typeof raw.error?.message === 'string' ? raw.error.message : null;
     let message = detail ?? `${provider.toUpperCase()} API HTTP ${response.status}`;
@@ -258,58 +322,89 @@ async function callOpenAiCompatible(
     } else if (response.status === 403) {
       message = detail ?? `${provider} authorization failed (HTTP 403). Check that the model is enabled on your account.`;
     }
-    return { ok: false, error: 'upstream_error', message };
+    return { ok: false, message };
   }
 
-  const content = raw?.choices?.[0]?.message?.content ?? '';
-  return parseModelOutput(content, provider, model);
+  return readChatStream(response);
 }
 
-async function callAnthropic(apiKey: string, model: string, userContent: string): Promise<GenerateSpecResult> {
-  const headers: Record<string, string> = {
-    'x-api-key': apiKey,
-    'anthropic-version': '2023-06-01',
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  };
+/** Models that take server-side refusal fallbacks (fallbacks: "default", beta server-side-fallback-2026-07-01). */
+const FALLBACK_MODELS_RE = /^claude-(opus-5-5|sonnet-5-5|fable-5-1)$/;
+/** Models that accept output_config.effort; Opus 5.5 defaults to "medium", too shallow for review. */
+const EFFORT_MODELS_RE = /^claude-(opus-(4-[5-9]|5)|sonnet-(4-6|5)|fable|mythos)/;
+
+/**
+ * Streams via the official SDK so long generations (reviews with thinking)
+ * don't hit HTTP timeouts; finalMessage() assembles the complete response.
+ */
+async function callAnthropic(
+  apiKey: string,
+  model: string,
+  system: string,
+  userContent: string,
+  maxTokens: number
+): Promise<ChatResult> {
   // Required by API keys that are not scoped to a single workspace.
   const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
-  if (workspaceId) headers['anthropic-workspace-id'] = workspaceId;
+  const client = new Anthropic({
+    apiKey,
+    defaultHeaders: workspaceId ? { 'anthropic-workspace-id': workspaceId } : undefined,
+  });
 
-  let response: Response;
+  const fallback = FALLBACK_MODELS_RE.test(model);
   try {
-    response = await fetch(CHAT_URL.anthropic, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
+    const message = await client.beta.messages
+      .stream({
         model,
-        system: SYSTEM_PROMPT,
+        max_tokens: maxTokens,
+        system,
         messages: [{ role: 'user', content: userContent }],
-        max_tokens: 8192,
-      }),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: 'upstream_error', message };
-  }
+        ...(EFFORT_MODELS_RE.test(model) ? { output_config: { effort: 'high' as const } } : {}),
+        // On a safety decline (e.g. the security pass tripping the cyber classifier), the API
+        // re-runs the request on a fallback model instead of returning an empty refusal.
+        ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+      })
+      .finalMessage();
 
-  const raw = (await response.json().catch(() => null)) as {
-    content?: Array<{ type?: string; text?: string }>;
-    error?: { message?: string };
-  } | null;
-
-  if (!response.ok) {
-    const detail =
-      raw && typeof raw === 'object' && typeof raw.error?.message === 'string' ? raw.error.message : null;
-    let message = detail ?? `anthropic API HTTP ${response.status}`;
-    if (response.status === 401) {
-      message = 'anthropic authentication failed (HTTP 401). Check the configured API key.';
+    if (message.stop_reason === 'refusal') {
+      return { ok: false, message: `${model} declined the request (refusal: ${message.stop_details?.category ?? 'unspecified'}).` };
     }
-    return { ok: false, error: 'upstream_error', message };
+    const text = message.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
+    return { ok: true, text, stopReason: message.stop_reason };
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) {
+      return { ok: false, message: 'anthropic authentication failed (HTTP 401). Check the configured API key.' };
+    }
+    if (err instanceof Anthropic.APIError) return { ok: false, message: `anthropic: ${err.message}` };
+    return { ok: false, message: describeFetchError(err) };
+  }
+}
+
+/** Sends one system + user turn to the configured LLM provider (Settings → Integrations). */
+export async function completeChat(
+  system: string,
+  userContent: string,
+  options: { maxTokens?: number; scope?: LlmConfigScope } = {}
+): Promise<(ChatResult & { ok: true; provider: LlmProvider; model: string }) | { ok: false; error: 'not_configured' | 'upstream_error'; message: string }> {
+  const { provider, apiKey, model } = resolveLlmConfig(options.scope);
+  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: 'not_configured',
+      message:
+        provider === 'nvidia'
+          ? 'No API key configured for nvidia. Set NVIDIA_API_KEY in .env (get one at build.nvidia.com).'
+          : `No API key configured for ${provider}. Set it in Settings → Integrations.`,
+    };
   }
 
-  const content = raw?.content?.find((b) => b.type === 'text')?.text ?? '';
-  return parseModelOutput(content, 'anthropic', model);
+  const result =
+    provider === 'anthropic'
+      ? await callAnthropic(apiKey, model, system, userContent, maxTokens)
+      : await callOpenAiCompatible(provider, apiKey, model, system, userContent, maxTokens);
+  if (result.ok === false) return { ok: false, error: 'upstream_error', message: result.message };
+  return { ...result, provider, model };
 }
 
 export async function generateSpecFromDescription(input: {
@@ -326,18 +421,6 @@ export async function generateSpecFromDescription(input: {
     return { ok: false, error: 'invalid_input' };
   }
 
-  const { provider, apiKey, model } = resolveLlmConfig();
-  if (!apiKey) {
-    return {
-      ok: false,
-      error: 'not_configured',
-      message:
-        provider === 'nvidia'
-          ? 'No API key configured for nvidia. Set NVIDIA_API_KEY in .env (get one at build.nvidia.com).'
-          : `No API key configured for ${provider}. Set it in Settings → Integrations.`,
-    };
-  }
-
   const parts = [wrapUntrusted('jira_issue', [`Issue: ${jiraKey}`, `Title: ${title}`, '', description].join('\n'))];
 
   const repoContext = input.repoContext?.trim();
@@ -347,8 +430,7 @@ export async function generateSpecFromDescription(input: {
 
   const userContent = parts.join('\n');
 
-  if (provider === 'anthropic') {
-    return callAnthropic(apiKey, model, userContent);
-  }
-  return callOpenAiCompatible(provider, apiKey, model, userContent);
+  const result = await completeChat(SYSTEM_PROMPT, userContent);
+  if (result.ok === false) return result;
+  return parseModelOutput(result.text, result.provider, result.model);
 }
