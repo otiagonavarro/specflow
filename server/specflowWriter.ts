@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { StructuredSpec } from './nimSpecGenerator.js';
+import type { GeneratedArtifacts } from './nimSpecGenerator.js';
 
 export const SPECFLOW_DIR = '.specflow';
 export const SPECFLOW_SPEC_FILE = 'spec.md';
@@ -90,13 +90,14 @@ export function writeSpecToSpecflow(repoPath: string, markdown: string, fallback
   }
 }
 
-/** Title from the proposal's first H1 (stripping a leading "Change:" label), or the fallback. */
-function extractChangeTitle(proposal: string, fallbackTitle: string): string {
-  const title = extractSpecTitle(proposal, fallbackTitle);
-  return title.replace(/^Change:\s*/i, '').trim() || fallbackTitle.trim();
-}
+export type ArtifactProvenance = {
+  jiraKey: string;
+  provider: string;
+  model: string;
+  promptVersion: string;
+};
 
-export type WriteStructuredSpecResult =
+export type WriteArtifactsResult =
   | {
       ok: true;
       specTitle: string;
@@ -108,59 +109,76 @@ export type WriteStructuredSpecResult =
   | { ok: false; error: 'write_failed'; message: string };
 
 /**
- * Writes an OpenSpec-shaped change (proposal.md, tasks.md, optional design.md,
- * specs/<capability>/spec.md) under .specflow/<folder>/ — same document
- * structure as openspec/changes/<id>/, without touching the openspec/ dir.
+ * Writes the AI-native SDLC artifact chain (intent.md → spec.md → plan.md)
+ * under .specflow/<slug>/, plus provenance.json recording the Jira key, model
+ * and prompt version that produced it so the set stays auditable.
  */
-export function writeStructuredSpecToSpecflow(
+export function writeArtifactsToSpecflow(
   repoPath: string,
-  structured: StructuredSpec,
+  artifacts: GeneratedArtifacts,
+  provenance: ArtifactProvenance,
   fallbackTitle: string
-): WriteStructuredSpecResult {
-  const specTitle = extractChangeTitle(structured.proposal, fallbackTitle);
-  const folderBase = structured.changeId || specTitleToFolderName(specTitle);
+): WriteArtifactsResult {
+  const specTitle = extractSpecTitle(artifacts.intent, fallbackTitle).replace(/^[^:]{1,20}:\s*/, '').trim() || fallbackTitle;
+  const folderBase = artifacts.slug || specTitleToFolderName(specTitle);
   const specflowRoot = path.join(repoPath, SPECFLOW_DIR);
 
+  // Write into a hidden staging dir and rename it into place only once every
+  // file is on disk, so a failed write never leaves a partial artifact set.
+  let stagingDir: string | null = null;
   try {
     fs.mkdirSync(specflowRoot, { recursive: true });
-    const specDir = uniqueSpecDir(specflowRoot, folderBase);
-    fs.mkdirSync(specDir, { recursive: true });
+    stagingDir = fs.mkdtempSync(path.join(specflowRoot, `.staging-${folderBase}-`));
 
-    const files: string[] = [];
-    const write = (relFromDir: string, content: string) => {
-      const abs = path.join(specDir, relFromDir);
-      fs.mkdirSync(path.dirname(abs), { recursive: true });
-      fs.writeFileSync(abs, content.endsWith('\n') ? content : `${content}\n`, { encoding: 'utf8', mode: 0o644 });
-      files.push(path.posix.join(SPECFLOW_DIR, path.basename(specDir), relFromDir));
+    const names: string[] = [];
+    const write = (name: string, content: string) => {
+      fs.writeFileSync(path.join(stagingDir!, name), content.endsWith('\n') ? content : `${content}\n`, {
+        encoding: 'utf8',
+        mode: 0o644,
+      });
+      names.push(name);
     };
 
-    write('proposal.md', structured.proposal);
-    write('tasks.md', structured.tasks);
-    if (structured.design) {
-      write('design.md', structured.design);
-    }
-    for (const spec of structured.specs) {
-      write(path.posix.join('specs', spec.capability, 'spec.md'), spec.delta);
-    }
+    write('intent.md', artifacts.intent);
+    write('spec.md', artifacts.spec);
+    write('plan.md', artifacts.plan);
+    write(
+      'provenance.json',
+      JSON.stringify(
+        {
+          ...provenance,
+          status: 'draft',
+          generatedAt: new Date().toISOString(),
+          artifacts: ['intent.md', 'spec.md', 'plan.md'],
+        },
+        null,
+        2
+      )
+    );
 
-    const proposalFile = path.join(specDir, 'proposal.md');
-    if (!fs.existsSync(proposalFile)) {
-      return {
-        ok: false,
-        error: 'write_failed',
-        message: `File was not found after write: ${proposalFile}`,
-      };
-    }
+    // mkdtemp creates the dir as 0700; match the permissions of a regular mkdir.
+    fs.chmodSync(stagingDir, 0o755);
+    const specDir = uniqueSpecDir(specflowRoot, folderBase);
+    fs.renameSync(stagingDir, specDir);
+    stagingDir = null;
 
+    const folderName = path.basename(specDir);
     return {
       ok: true,
       specTitle,
-      folderName: path.basename(specDir),
+      folderName,
       absolutePath: specDir,
-      relativePath: path.posix.join(SPECFLOW_DIR, path.basename(specDir)),
-      files,
+      relativePath: path.posix.join(SPECFLOW_DIR, folderName),
+      files: names.map((name) => path.posix.join(SPECFLOW_DIR, folderName, name)),
     };
   } catch (err) {
+    if (stagingDir) {
+      try {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      } catch {
+        // Best effort: the original error is the one worth reporting.
+      }
+    }
     return {
       ok: false,
       error: 'write_failed',
