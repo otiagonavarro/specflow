@@ -11,6 +11,90 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [2026-10-07]
+
+### Fixed
+
+- fix(ui): add favicon to the app — *Tiago Ribeiro Navarro de Andrade*
+
+---
+
+## [2026-10-06]
+
+### Added
+
+- feat(review): review the task's open PR (AI-native SDLC Stage 5) — *Tiago Ribeiro Navarro de Andrade*
+- feat(llm): stream responses, Anthropic SDK and a separate review model — *Tiago Ribeiro Navarro de Andrade*
+- feat(ide): add Antigravity IDE and Kiro to "Open in IDE" — *Tiago Ribeiro Navarro de Andrade*
+- feat(spec): generate .specflow artifacts following the AI-native SDLC playbook — *Tiago Ribeiro Navarro de Andrade*
+
+### Fixed
+
+- fix(llm): eliminate impossible union member in completeChat return type — *Tiago Ribeiro Navarro de Andrade*
+- fix(review): harden PR review per review feedback — *Tiago Ribeiro Navarro de Andrade*
+- fix(llm): read NVIDIA key from .env and update retired default models — *Tiago Ribeiro Navarro de Andrade*
+- fix(spec): harden artifact generation per review feedback — *Tiago Ribeiro Navarro de Andrade*
+
+---
+
+## [2026-09-05]
+
+### Changed
+
+- chore(assets): update logo artwork — *Tiago Ribeiro Navarro de Andrade*
+
+---
+
+## [2026-09-03]
+
+### Fixed
+
+- fix(nimSpecGenerator): dedupe capability slugs and validate delta shape — *Tiago Ribeiro Navarro de Andrade*
+
+---
+
+## [2026-09-02]
+
+### Added
+
+- feat(server): generate OpenSpec-shaped specs (proposal, tasks, design, spec deltas) — *Tiago Ribeiro Navarro de Andrade*
+
+### Changed
+
+- chore(skills): add local workflow skills (tdd, codebase-design, productivity) — *Tiago Ribeiro Navarro de Andrade*
+
+---
+
+## [2026-07-25]
+
+### Added
+
+- docs: add MIT license — *Tiago Ribeiro Navarro de Andrade*
+- rename(project): kanbam-code -> specflow — *Tiago Ribeiro Navarro de Andrade*
+
+### Fixed
+
+- fix(cli): stop using npm install -g <git-url> in "update" — *Tiago Ribeiro Navarro de Andrade*
+
+---
+
+## [2026-07-24]
+
+### Added
+
+- add skills — *Tiago Ribeiro Navarro de Andrade*
+- feat(cli): add "kanbam-code update" for existing installs — *Tiago Ribeiro Navarro de Andrade*
+- ci: rewrite CI for this repo, add tag-triggered CD release workflow — *Tiago Ribeiro Navarro de Andrade*
+- docs: regenerate CHANGELOG from git log, add stack badges to README — *Tiago Ribeiro Navarro de Andrade*
+- feat(dashboard): rework throughput and lead-time charts for readability — *Tiago Ribeiro Navarro de Andrade*
+- feat(settings): allow choosing LLM provider and API key, override NVIDIA default — *Tiago Ribeiro Navarro de Andrade*
+
+### Fixed
+
+- fix(ci): scope markdownlint pathspec with :(glob) magic — *Tiago Ribeiro Navarro de Andrade*
+
+---
+
 ## [2026-07-16] — `2b10b10` (PR #5)
 
 ### Chore
