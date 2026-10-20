@@ -17,11 +17,11 @@
 
 **Jira-integrated kanban UI + local Express API.** The browser never holds Jira tokens; the server reads them from `.env` or from in-app Settings.
 
-**Repository:** [github.com/tiagornandrade/specflow](https://github.com/tiagornandrade/specflow)
+**Repository:** [github.com/otiagonavarro/specflow](https://github.com/otiagonavarro/specflow)
 
 **Works on macOS, Windows, and Linux** (Node.js + Git for the `create` flow).
 
-**Not on the public npm registry.** Bare `npx specflow …` will 404. Either use **`npx --package=github:tiagornandrade/specflow specflow …`** (see below) or clone the repo and run commands locally.
+**Not on the public npm registry.** Bare `npx specflow …` will 404. Either use **`npx --package=github:otiagonavarro/specflow specflow …`** (see below) or clone the repo and run commands locally.
 
 ---
 
@@ -43,7 +43,7 @@ The **user interface language** is Brazilian Portuguese; code and this README st
 You do **not** need to be inside this repository. Pick a parent directory (e.g. `~/projects`), then run:
 
 ```bash
-npx --package=github:tiagornandrade/specflow specflow create my-dashboard
+npx --package=github:otiagonavarro/specflow specflow create my-dashboard
 cd my-dashboard
 npm run init
 ```
@@ -64,7 +64,7 @@ Stop with **Ctrl+C**.
 ### One-liner (clone + install + run)
 
 ```bash
-git clone https://github.com/tiagornandrade/specflow.git && cd specflow && npm install && npm run init
+git clone https://github.com/otiagonavarro/specflow.git && cd specflow && npm install && npm run init
 ```
 
 ### Already cloned (development)
@@ -83,12 +83,17 @@ The package isn't on the public npm registry yet, but you can still install the 
 
 ```bash
 # Option A — straight from GitHub
-npm install -g github:tiagornandrade/specflow
+npm install -g github:otiagonavarro/specflow
 
 # Option B — from a local clone (symlinks the repo as the global bin)
-git clone https://github.com/tiagornandrade/specflow.git
+git clone https://github.com/otiagonavarro/specflow.git
 cd specflow && npm install
 npm link
+
+# Option C — from GitHub Packages (needs a GitHub token with read:packages)
+npm config set @otiagonavarro:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken <YOUR_GITHUB_TOKEN>
+npm install -g @otiagonavarro/specflow
 ```
 
 Either way, the `specflow` command becomes available everywhere:
@@ -99,7 +104,7 @@ specflow init
 specflow --help
 ```
 
-> Once published to npm, this becomes simply `npm install -g specflow`.
+> Releases are tagged `vX.Y.Z`; each tag publishes a GitHub Release and the `@otiagonavarro/specflow` package to GitHub Packages.
 
 To update a global install later, run **`specflow update`**. It keeps a persistent clone at `~/.specflow/src` (pulling/cloning + `npm install` there), then relinks the global bin to it — this avoids `npm install -g github:…`, which symlinks into npm's own cache tmp folder and can fail once npm garbage-collects it mid-install.
 
@@ -108,20 +113,20 @@ To update a global install later, run **`specflow update`**. It keeps a persiste
 The package is **not** on the public npm registry. Use GitHub as the package source:
 
 ```bash
-npx --package=github:tiagornandrade/specflow specflow init
+npx --package=github:otiagonavarro/specflow specflow init
 ```
 
 Point at your clone (keeps `.env`, Jira settings, and `LOCAL_REPOS_ROOT`):
 
 ```bash
-npx --package=github:tiagornandrade/specflow specflow init ~/projects/specflow
+npx --package=github:otiagonavarro/specflow specflow init ~/projects/specflow
 ```
 
 Or set once in your shell profile:
 
 ```bash
 export SPECFLOW_HOME=~/projects/specflow
-npx --package=github:tiagornandrade/specflow specflow init
+npx --package=github:otiagonavarro/specflow specflow init
 ```
 
 > Bare `npx specflow` will 404. Always pass `--package=github:…`.
@@ -209,7 +214,7 @@ See **`.env.example`**. Secrets stay in environment variables or `.env` — neve
 
 - The app is **not published** to npm. `npx specflow` looks there first and fails.
 - **First-time setup from another folder:**
-  `npx --package=github:tiagornandrade/specflow specflow create my-dashboard`
+  `npx --package=github:otiagonavarro/specflow specflow create my-dashboard`
   then `cd my-dashboard && npm run init`.
 - **Already in a clone:** `npm install` then `npx specflow init` or `npm run init`.
 

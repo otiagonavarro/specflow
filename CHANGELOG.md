@@ -11,6 +11,33 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [0.1.0] — 2026-10-20
+
+Primeira release versionada. Publicada como GitHub Release (com o `dist/` em zip)
+e como pacote npm `@otiagonavarro/specflow` no GitHub Packages.
+
+### Added
+- Geração de artefatos `.specflow/<feature>/` (`intent.md`, `spec.md`, `plan.md`, `provenance.json`) seguindo o playbook AI-native SDLC.
+- Review do PR aberto da task (AI-native SDLC Stage 5), com publicação opcional do review no GitHub.
+- Respostas do LLM via streaming, suporte ao SDK da Anthropic e modelo separado para review.
+- Antigravity IDE e Kiro na seção "Open in IDE".
+- Specs no formato OpenSpec (proposal, tasks, design) geradas pelo servidor.
+- Escolha de provedor de LLM e API key nas Settings.
+- Comando `specflow update` para instalações existentes.
+- Workflow de CD disparado por tag, criando a GitHub Release e publicando o pacote.
+
+### Changed
+- Projeto renomeado de `kanbam-code` para `specflow`; licença MIT adicionada.
+- Gráficos de throughput e lead time do dashboard reformulados para facilitar a leitura.
+- Logo atualizado.
+
+### Fixed
+- Seta do dropdown "Local repository" desalinhada e painel do OpenSpec cortando o conteúdo depois do aviso de salvo.
+- Favicon do app.
+- Chave da NVIDIA lida do `.env` e modelos padrão aposentados substituídos.
+- Endurecimento da geração de artefatos e do review de PR conforme feedback de review.
+- `specflow update` não usa mais `npm install -g <git-url>`.
+
 ## [2026-07-16] — `2b10b10` (PR #5)
 
 ### Chore

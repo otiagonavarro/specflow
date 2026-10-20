@@ -1,12 +1,10 @@
-# PROPOSTA — revise antes de commitar/mesclar.
-#
 # Este repo é uma ferramenta local (CLI + servidor Express) sem alvo de deploy
-# hospedado — não há Dockerfile, Cloud Run, Vercel, etc. Distribuição é via
-# clone/npx --package=github:... (ver README), não npm registry.
+# hospedado — não há Dockerfile, Cloud Run, Vercel, etc.
 #
-# Por isso o "CD" aqui não é deploy de serviço nem publish no npm, é apenas
-# *entrega* do build: ao empurrar uma tag `vX.Y.Z`, builda o frontend, empacota
-# `dist/` e cria uma GitHub Release com o trecho correspondente do CHANGELOG.md.
+# Por isso o "CD" aqui não é deploy de serviço, é *entrega*: ao empurrar uma tag
+# `vX.Y.Z` (igual à versão do package.json), builda o frontend, empacota `dist/`,
+# cria uma GitHub Release com o trecho correspondente do CHANGELOG.md e publica
+# o pacote `@otiagonavarro/specflow` no GitHub Packages (não no npmjs.org).
 
 name: CD
 
@@ -19,6 +17,35 @@ permissions:
   contents: write
 
 jobs:
+  verify-tag:
+    name: Verify release tag
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check tag matches package.json version
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "v${PKG_VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}"
+            exit 1
+          fi
+
+      # Só publica commits que já passaram por review e estão na main.
+      - name: Check tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points to ${GITHUB_SHA}, which is not on main"
+            exit 1
+          fi
+
   build:
     name: Build release artifact
     runs-on: ubuntu-latest
@@ -59,7 +86,7 @@ jobs:
   github-release:
     name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, publish-package]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -90,3 +117,41 @@ jobs:
           files: '*.zip'
           body: ${{ steps.notes.outputs.body || format('Release {0}', github.ref_name) }}
           generate_release_notes: true
+
+  publish-package:
+    name: Publish to GitHub Packages
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify-tag, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          registry-url: https://npm.pkg.github.com
+          scope: '@otiagonavarro'
+
+      # Re-run da mesma tag não deve falhar se a versão já foi publicada.
+      - name: Check if version is already published
+        id: published
+        run: |
+          SPEC="$(node -p "const p=require('./package.json'); p.name + '@' + p.version")"
+          if npm view "$SPEC" version >/dev/null 2>&1; then
+            echo "$SPEC is already published, skipping"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --ignore-scripts: nenhum lifecycle script roda com o token de publicação.
+      - name: Publish
+        if: steps.published.outputs.exists != 'true'
+        run: npm publish --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

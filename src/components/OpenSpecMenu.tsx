@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
 import { ChevronDown, Sparkles, Loader, GitPullRequest, ShieldCheck, Send, ExternalLink } from 'lucide-react';
 import { isGithubConfigured } from '../api/config';
 import { fetchLocalRepoFolders, openIdeFolderOnServer, type LocalRepoFolder } from '../api/workspace';
@@ -43,6 +43,8 @@ export default function OpenSpecMenu({
 }: OpenSpecMenuProps) {
   const { t } = useLocale();
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelMaxHeight, setPanelMaxHeight] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [repos, setRepos] = useState<LocalRepoFolder[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
@@ -92,6 +94,19 @@ export default function OpenSpecMenu({
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
+  }, [panelOpen]);
+
+  /** Caps the panel at the space between its top edge and the bottom of the viewport. */
+  useLayoutEffect(() => {
+    if (!panelOpen) return;
+    const measure = () => {
+      const top = panelRef.current?.getBoundingClientRect().top;
+      if (top == null) return;
+      setPanelMaxHeight(Math.max(160, window.innerHeight - top - 16));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, [panelOpen]);
 
   const loadRepos = useCallback(async () => {
@@ -280,7 +295,9 @@ export default function OpenSpecMenu({
 
       {panelOpen && (
         <div
-          className={`absolute right-0 top-full mt-1 z-[200] max-h-[min(72dvh,36rem)] overflow-y-auto overflow-x-hidden ${menuWidth} rounded-xl border border-outline-variant/15 bg-[#1a1a1c] shadow-xl py-3 px-3 space-y-3`}
+          ref={panelRef}
+          style={panelMaxHeight != null ? { maxHeight: panelMaxHeight } : undefined}
+          className={`absolute right-0 top-full mt-1 z-[200] max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain overflow-x-hidden ${menuWidth} rounded-xl border border-outline-variant/15 bg-[#1a1a1c] shadow-xl py-3 px-3 space-y-3`}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           role="dialog"
@@ -304,18 +321,24 @@ export default function OpenSpecMenu({
               <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
                 {t('openspec.repoLabel')}
               </span>
-              <select
-                value={selectedName}
-                onChange={(e) => onSelectRepo(e.target.value)}
-                className="w-full bg-surface-highest text-zinc-200 text-xs font-mono px-2 py-2 rounded-lg border border-outline-variant/10"
-              >
-                <option value="">{t('openspec.selectRepo')}</option>
-                {repos.map((r) => (
-                  <option key={r.absolutePath} value={r.name}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={selectedName}
+                  onChange={(e) => onSelectRepo(e.target.value)}
+                  className="w-full appearance-none cursor-pointer bg-surface-highest text-zinc-200 text-xs font-mono pl-3 pr-9 py-2 rounded-lg border border-outline-variant/10 outline-none focus:border-primary/30 transition-colors"
+                >
+                  <option value="">{t('openspec.selectRepo')}</option>
+                  {repos.map((r) => (
+                    <option key={r.absolutePath} value={r.name}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500"
+                />
+              </div>
               <span className="text-[9px] text-zinc-600 leading-relaxed">{t('openspec.repoHint')}</span>
             </label>
           )}
@@ -363,22 +386,28 @@ export default function OpenSpecMenu({
                 <>
                   <div className="flex items-center gap-1.5">
                     {prs.length > 1 ? (
-                      <select
-                        value={selectedPr ?? ''}
-                        onChange={(e) => {
-                          setSelectedPr(Number(e.target.value));
-                          setReviewing(false);
-                          setReview(null);
-                          setPublishedUrl(null);
-                        }}
-                        className="min-w-0 flex-1 bg-surface-highest text-zinc-200 text-[11px] px-2 py-1.5 rounded-lg border border-outline-variant/10"
-                      >
-                        {prs.map((pr) => (
-                          <option key={pr.number} value={pr.number}>
-                            #{pr.number} {pr.title}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative min-w-0 flex-1">
+                        <select
+                          value={selectedPr ?? ''}
+                          onChange={(e) => {
+                            setSelectedPr(Number(e.target.value));
+                            setReviewing(false);
+                            setReview(null);
+                            setPublishedUrl(null);
+                          }}
+                          className="w-full appearance-none cursor-pointer bg-surface-highest text-zinc-200 text-[11px] pl-2.5 pr-8 py-1.5 rounded-lg border border-outline-variant/10 outline-none focus:border-primary/30 transition-colors"
+                        >
+                          {prs.map((pr) => (
+                            <option key={pr.number} value={pr.number}>
+                              #{pr.number} {pr.title}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          size={13}
+                          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                        />
+                      </div>
                     ) : (
                       <a
                         href={prs[0].url}

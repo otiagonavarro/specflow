@@ -23,7 +23,8 @@ function readPackageJson(dir) {
 }
 
 function isSpecflowRoot(dir) {
-  return readPackageJson(dir)?.name === 'specflow';
+  const name = readPackageJson(dir)?.name;
+  return name === 'specflow' || name === '@otiagonavarro/specflow';
 }
 
 function findAppRoot(start = process.cwd()) {
