@@ -89,6 +89,11 @@ npm install -g github:tiagornandrade/specflow
 git clone https://github.com/tiagornandrade/specflow.git
 cd specflow && npm install
 npm link
+
+# Option C — from GitHub Packages (needs a GitHub token with read:packages)
+npm config set @otiagonavarro:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken <YOUR_GITHUB_TOKEN>
+npm install -g @otiagonavarro/specflow
 ```
 
 Either way, the `specflow` command becomes available everywhere:
@@ -99,7 +104,7 @@ specflow init
 specflow --help
 ```
 
-> Once published to npm, this becomes simply `npm install -g specflow`.
+> Releases are tagged `vX.Y.Z`; each tag publishes a GitHub Release and the `@otiagonavarro/specflow` package to GitHub Packages.
 
 To update a global install later, run **`specflow update`**. It keeps a persistent clone at `~/.specflow/src` (pulling/cloning + `npm install` there), then relinks the global bin to it — this avoids `npm install -g github:…`, which symlinks into npm's own cache tmp folder and can fail once npm garbage-collects it mid-install.
 
